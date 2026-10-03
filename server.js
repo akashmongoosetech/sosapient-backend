@@ -77,6 +77,7 @@ const blogRoutes = require('./routes/blog.routes');
 const chatRoutes = require('./routes/chat.routes');
 const copilotKitRoutes = require('./routes/copilotkit.routes');
 const jobRoutes = require('./routes/job.routes');
+const caseStudyRoutes = require('./routes/caseStudy.routes');
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -101,6 +102,7 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/copilotkit', copilotKitRoutes);
 app.use('/api', subscriberRoutes);
 app.use('/api/jobs', jobRoutes);
+app.use('/api/case-studies', caseStudyRoutes);
 
 // 404 for unknown API routes
 app.use('/api', (req, res) => {

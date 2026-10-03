@@ -1,4 +1,5 @@
 const Blog = require('../models/blog.model');
+const CaseStudy = require('../models/caseStudy.model');
 
 function siteUrl() {
   return String(process.env.SITE_URL || 'https://sosapient.in').replace(/\/+$/, '');
@@ -45,10 +46,21 @@ async function sitemap(req, res) {
       'rag-system-integration',
       'saas-product-development'
     ];
+    const cases = await CaseStudy.find({ published: true })
+      .select('slug updatedAt')
+      .sort({ updatedAt: -1 })
+      .lean();
     const urls = [
       { loc: `${base}/`, changefreq: 'daily', priority: '1.0' },
       { loc: `${base}/blog`, changefreq: 'daily', priority: '0.9' },
       { loc: `${base}/services`, changefreq: 'weekly', priority: '0.9' },
+      { loc: `${base}/case-studies`, changefreq: 'weekly', priority: '0.9' },
+      ...cases.map((c) => ({
+        loc: `${base}/case-studies/${c.slug}`,
+        lastmod: c.updatedAt ? new Date(c.updatedAt).toISOString() : undefined,
+        changefreq: 'weekly',
+        priority: '0.8'
+      })),
       ...serviceSlugs.map((slug) => ({
         loc: `${base}/services/${slug}`,
         changefreq: 'monthly',
@@ -83,6 +95,8 @@ function robots(req, res) {
     'Allow: /blog/*',
     'Allow: /services',
     'Allow: /services/*',
+    'Allow: /case-studies',
+    'Allow: /case-studies/*',
     'Disallow: /admin',
     'Disallow: /admin/*',
     'Disallow: /api/',
