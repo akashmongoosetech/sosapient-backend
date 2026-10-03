@@ -18,6 +18,7 @@ pids/
 .env
 .env.local
 .env.*.local
+.env.production
 
 # Uploads (PII + binaries must never be committed; use object storage in prod)
 uploads/
