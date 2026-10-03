@@ -28,9 +28,32 @@ async function sitemap(req, res) {
       .select('slug updatedAt publishedAt')
       .sort({ updatedAt: -1 })
       .lean();
+    const serviceSlugs = [
+      'frontend-development',
+      'backend-development',
+      'mobile-development',
+      'cloud-devops',
+      'ui-ux-design',
+      'security-testing',
+      'ai-development',
+      'ai-automations',
+      'business-solutions',
+      'custom-crm-development',
+      'erp-development',
+      'ai-solutions',
+      'chatbot-development',
+      'rag-system-integration',
+      'saas-product-development'
+    ];
     const urls = [
       { loc: `${base}/`, changefreq: 'daily', priority: '1.0' },
       { loc: `${base}/blog`, changefreq: 'daily', priority: '0.9' },
+      { loc: `${base}/services`, changefreq: 'weekly', priority: '0.9' },
+      ...serviceSlugs.map((slug) => ({
+        loc: `${base}/services/${slug}`,
+        changefreq: 'monthly',
+        priority: '0.8'
+      })),
       ...posts.map((p) => ({
         loc: `${base}/blog/${p.slug}`,
         lastmod: (p.updatedAt || p.publishedAt)
@@ -58,6 +81,8 @@ function robots(req, res) {
     'User-agent: *',
     'Allow: /blog',
     'Allow: /blog/*',
+    'Allow: /services',
+    'Allow: /services/*',
     'Disallow: /admin',
     'Disallow: /admin/*',
     'Disallow: /api/',
