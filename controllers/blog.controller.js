@@ -795,6 +795,12 @@ const createBlog = async (req, res) => {
       }
     }
 
+    try {
+      require('../services/ragIndex').queueBlogIndex(blog);
+    } catch (e) {
+      // indexing is best-effort only
+    }
+
     res.status(201).json({
       success: true,
       message: 'Blog post created successfully',
@@ -1008,6 +1014,12 @@ const updateBlog = async (req, res) => {
       });
     }
 
+    try {
+      require('../services/ragIndex').queueBlogIndex(blog);
+    } catch (e) {
+      // indexing is best-effort only
+    }
+
     res.json({
       success: true,
       message: 'Blog post updated successfully',
@@ -1071,6 +1083,12 @@ const deleteBlog = async (req, res) => {
       }
     } catch (e) {
       // best-effort cleanup only
+    }
+
+    try {
+      require('../services/ragIndex').queueBlogRemove(id);
+    } catch (e) {
+      // indexing is best-effort only
     }
 
     res.json({

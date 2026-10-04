@@ -1,0 +1,957 @@
+{
+ "exportedAt": "2026-10-04T07:09:54.837Z",
+ "services": [
+  {
+   "name": "Frontend Development",
+   "slug": "frontend-development",
+   "category": "development",
+   "shortDescription": "Fast, responsive web interfaces with modern frameworks and clean component architecture.",
+   "description": "We build fast, responsive and accessible web interfaces with React, Next.js and TypeScript — engineered for performance, SEO and long-term maintainability.",
+   "tags": [
+    "React.js",
+    "Next.js",
+    "TypeScript",
+    "Tailwind CSS"
+   ],
+   "technologies": [
+    "React.js",
+    "Next.js",
+    "Angular",
+    "Vue.js",
+    "TypeScript",
+    "JavaScript",
+    "Tailwind CSS",
+    "MUI",
+    "Redux",
+    "Vite"
+   ],
+   "faqs": [
+    {
+     "q": "How long does frontend development take?",
+     "a": "A marketing site typically takes 2–4 weeks; a full application frontend with dashboards and integrations usually takes 6–12 weeks depending on scope. We confirm a timeline after a short discovery call."
+    },
+    {
+     "q": "Do you build responsive websites?",
+     "a": "Yes — every interface is designed mobile-first and verified across phone, tablet and desktop breakpoints before delivery."
+    },
+    {
+     "q": "Can you integrate with our existing APIs?",
+     "a": "Absolutely. We build typed API clients against your REST or GraphQL endpoints and handle loading, error and empty states throughout."
+    },
+    {
+     "q": "Do you work with existing applications?",
+     "a": "Yes. We can extend, refactor or gradually migrate an existing frontend — including strangler-pattern migrations off legacy stacks."
+    },
+    {
+     "q": "Can you improve an existing slow frontend?",
+     "a": "Yes. We start with a performance audit (bundle, images, render bottlenecks) and then fix the highest-impact issues first."
+    },
+    {
+     "q": "Do you provide ongoing maintenance?",
+     "a": "Yes. We offer maintenance plans covering updates, monitoring, small feature work and performance reviews."
+    }
+   ],
+   "related": [
+    "backend-development",
+    "ui-ux-design",
+    "mobile-development",
+    "saas-product-development"
+   ]
+  },
+  {
+   "name": "Backend Development",
+   "slug": "backend-development",
+   "category": "development",
+   "shortDescription": "Robust Node.js APIs, authentication and database architecture that scale with you.",
+   "description": "We design secure REST APIs, authentication systems and database schemas with Node.js and Express — the reliable foundation your product runs on.",
+   "tags": [
+    "Node.js",
+    "Express.js",
+    "REST API",
+    "MongoDB"
+   ],
+   "technologies": [
+    "Node.js",
+    "Express.js",
+    "NestJS",
+    "Python",
+    "Django",
+    "FastAPI",
+    "PHP",
+    "Laravel",
+    "REST API",
+    "GraphQL"
+   ],
+   "faqs": [
+    {
+     "q": "Which backend stack do you use?",
+     "a": "Primarily Node.js with Express and MongoDB or PostgreSQL, chosen per project. We can also work with your existing stack."
+    },
+    {
+     "q": "How do you handle authentication?",
+     "a": "Secure password hashing with bcrypt, JWT-based sessions, and role-based access control enforced on every protected endpoint."
+    },
+    {
+     "q": "Can you integrate payment gateways?",
+     "a": "Yes — Stripe and similar providers, including subscriptions, webhooks and reconciliation flows."
+    },
+    {
+     "q": "Do you document the APIs?",
+     "a": "Yes. Every endpoint ships with request/response documentation your frontend or partner teams can build against."
+    },
+    {
+     "q": "Can you scale an existing backend?",
+     "a": "Yes. We profile bottlenecks (queries, indexes, N+1 calls) and fix them before adding caching or horizontal scaling."
+    },
+    {
+     "q": "Do you support deployment?",
+     "a": "Yes — environment setup, deployment pipelines and monitoring guidance are part of delivery."
+    }
+   ],
+   "related": [
+    "frontend-development",
+    "saas-product-development",
+    "security-testing",
+    "cloud-devops"
+   ]
+  },
+  {
+   "name": "Mobile Development",
+   "slug": "mobile-development",
+   "category": "development",
+   "shortDescription": "Polished iOS and Android apps from a single codebase, wired to your backend.",
+   "description": "We build cross-platform mobile apps with one codebase for iOS and Android — native feel, push notifications, offline support and store-ready releases.",
+   "tags": [
+    "React Native",
+    "iOS",
+    "Android",
+    "Push Notifications"
+   ],
+   "technologies": [
+    "React Native",
+    "Flutter",
+    "Expo",
+    "Dart",
+    "Kotlin",
+    "Swift",
+    "SwiftUI",
+    "Firebase"
+   ],
+   "faqs": [
+    {
+     "q": "Native or cross-platform — which should I choose?",
+     "a": "For most business apps, cross-platform (React Native) delivers ~95% of the experience at roughly half the cost. We recommend true native only for heavy 3D, video editing or Bluetooth-intensive use cases."
+    },
+    {
+     "q": "How long does app development take?",
+     "a": "A focused MVP typically takes 8–12 weeks including backend integration and store submission. Larger apps with offline sync or custom hardware features take longer."
+    },
+    {
+     "q": "Do you handle App Store and Play Store submission?",
+     "a": "Yes — certificates, listings, screenshots, privacy declarations and review responses are all included."
+    },
+    {
+     "q": "Can the app work offline?",
+     "a": "Yes for defined workflows. We design offline-first data sync so field teams keep working without signal and sync later."
+    },
+    {
+     "q": "Can you add push notifications to my existing app?",
+     "a": "Yes — we can integrate push into an existing codebase along with segmentation and analytics."
+    },
+    {
+     "q": "Do you provide post-launch support?",
+     "a": "Yes — OS updates, store policy changes and crash fixes are covered under maintenance plans."
+    }
+   ],
+   "related": [
+    "frontend-development",
+    "backend-development",
+    "ui-ux-design",
+    "saas-product-development"
+   ]
+  },
+  {
+   "name": "Cloud & DevOps",
+   "slug": "cloud-devops",
+   "category": "cloud-infrastructure",
+   "shortDescription": "Cloud infrastructure, CI/CD pipelines and monitoring for reliable releases.",
+   "description": "We set up cloud hosting, automated deployments, Docker environments and monitoring — so releases become routine instead of risky events.",
+   "tags": [
+    "AWS",
+    "Docker",
+    "CI/CD",
+    "Monitoring"
+   ],
+   "technologies": [
+    "AWS",
+    "Azure",
+    "GCP",
+    "Vercel",
+    "Docker",
+    "Kubernetes",
+    "Terraform",
+    "GitHub Actions",
+    "Nginx",
+    "Linux"
+   ],
+   "faqs": [
+    {
+     "q": "Which cloud provider should I use?",
+     "a": "It depends on scale and budget. We commonly deploy on AWS, Render, Vercel or Netlify, and will recommend based on your traffic, team and cost constraints."
+    },
+    {
+     "q": "Can you fix our existing deployment process?",
+     "a": "Yes. We audit the current setup, then introduce automation incrementally — usually CI first, then staging parity, then automated production deploys."
+    },
+    {
+     "q": "Do you use Docker?",
+     "a": "Yes. Containerizing services eliminates environment drift between development, staging and production."
+    },
+    {
+     "q": "How do you handle monitoring?",
+     "a": "Health-check endpoints, uptime monitors, error tracking and log aggregation with alerts routed to your team’s channel of choice."
+    },
+    {
+     "q": "Can you reduce our cloud bill?",
+     "a": "Often, yes. Right-sizing instances, cleaning orphaned resources and choosing managed services wisely typically cuts waste significantly."
+    },
+    {
+     "q": "Do you document everything?",
+     "a": "Always. You get a runbook covering deploys, rollbacks, secrets rotation and common incidents — no black boxes."
+    }
+   ],
+   "related": [
+    "backend-development",
+    "security-testing",
+    "saas-product-development",
+    "frontend-development"
+   ]
+  },
+  {
+   "name": "UI/UX Design",
+   "slug": "ui-ux-design",
+   "category": "design-quality",
+   "shortDescription": "Research-backed UX, wireframes, prototypes and design systems that convert.",
+   "description": "We turn fuzzy ideas into tested interfaces — user research, wireframes, interactive prototypes and complete design systems developers love to build from.",
+   "tags": [
+    "Figma",
+    "Design Systems",
+    "Prototyping",
+    "User Research"
+   ],
+   "technologies": [
+    "Figma",
+    "Adobe XD",
+    "Photoshop",
+    "Illustrator",
+    "Framer",
+    "FigJam",
+    "Miro",
+    "Storybook"
+   ],
+   "faqs": [
+    {
+     "q": "What does your design process look like?",
+     "a": "Research → flows → wireframes → prototype → test → visual system. You review and approve at each stage, so there are no big-bang surprises."
+    },
+    {
+     "q": "Can you redesign our existing product?",
+     "a": "Yes. We start with a UX audit of your current product, prioritize the highest-friction flows, and redesign incrementally so development never stalls."
+    },
+    {
+     "q": "Do you test with real users?",
+     "a": "Yes — moderated or unmoderated tests with 5–8 representative users per round, which reliably surfaces the biggest issues."
+    },
+    {
+     "q": "What do developers receive?",
+     "a": "A Figma system with components, states, spacing tokens, responsive rules and exportable assets — everything needed to build pixel-accurate screens."
+    },
+    {
+     "q": "Can you just do a logo or landing page?",
+     "a": "Yes for focused engagements, though most clients get the most value from a full flow or system engagement."
+    },
+    {
+     "q": "Do you handle branding too?",
+     "a": "We handle product-side identity (logo usage, colors, typography). Full brand strategy is scoped separately on request."
+    }
+   ],
+   "related": [
+    "frontend-development",
+    "mobile-development",
+    "saas-product-development",
+    "business-solutions"
+   ]
+  },
+  {
+   "name": "Security & Testing",
+   "slug": "security-testing",
+   "category": "design-quality",
+   "shortDescription": "Security reviews, OWASP hardening and test coverage across your stack.",
+   "description": "We harden applications against common attacks and back them with automated tests — so releases are safe, repeatable and drama-free.",
+   "tags": [
+    "OWASP",
+    "Pen Testing",
+    "E2E Testing",
+    "CI Checks"
+   ],
+   "technologies": [
+    "Jest",
+    "Vitest",
+    "Cypress",
+    "Playwright",
+    "Postman",
+    "OWASP",
+    "Snyk",
+    "SonarQube",
+    "JWT",
+    "OAuth"
+   ],
+   "faqs": [
+    {
+     "q": "What does a security review cover?",
+     "a": "Authentication, authorization boundaries, input validation, file uploads, API abuse vectors, security headers, dependency risks and exposed secrets — mapped to OWASP categories with severity ratings."
+    },
+    {
+     "q": "Is this a certified penetration test?",
+     "a": "No — this is an engineering-led security review and hardening engagement. If you need a certified pentest for compliance, we prepare your app for it and can recommend partners."
+    },
+    {
+     "q": "Do you fix the issues you find?",
+     "a": "Yes. Findings come with fixes for the agreed scope, followed by re-testing to confirm each issue is closed."
+    },
+    {
+     "q": "What testing frameworks do you use?",
+     "a": "We match your stack — typically Jest/Vitest for unit, Supertest for APIs, and Playwright or Cypress for end-to-end flows."
+    },
+    {
+     "q": "Can you add tests to our existing project?",
+     "a": "Yes. We start with the highest-risk paths (auth, payments, core workflows) and expand coverage iteratively."
+    },
+    {
+     "q": "Will testing slow down our releases?",
+     "a": "The opposite — automated suites run in minutes on every push and catch regressions that manual QA would miss or find too late."
+    }
+   ],
+   "related": [
+    "backend-development",
+    "cloud-devops",
+    "saas-product-development",
+    "frontend-development"
+   ]
+  },
+  {
+   "name": "AI Development",
+   "slug": "ai-development",
+   "category": "ai-automation",
+   "shortDescription": "LLM-powered features, assistants and intelligent search built on your data.",
+   "description": "We integrate large language models into real products — support assistants, semantic search, summarization and AI agents with guardrails, evals and cost controls.",
+   "tags": [
+    "LLM APIs",
+    "AI Agents",
+    "Embeddings",
+    "Prompt Engineering"
+   ],
+   "technologies": [
+    "OpenAI",
+    "Gemini",
+    "Claude",
+    "Llama",
+    "LangChain",
+    "LangGraph",
+    "LlamaIndex",
+    "Hugging Face",
+    "PyTorch"
+   ],
+   "faqs": [
+    {
+     "q": "What kinds of AI features can you build?",
+     "a": "Support assistants, semantic search, document Q&A, summarization, ticket triage, lead enrichment and multi-step AI agents — always grounded in your data."
+    },
+    {
+     "q": "How do you prevent hallucinations?",
+     "a": "Retrieval grounding, citation requirements, structured outputs, confidence thresholds and human review queues for high-stakes answers."
+    },
+    {
+     "q": "How much do LLM API calls cost?",
+     "a": "It varies by volume, but we design with caching, smaller models for simple tasks and token budgets — you see projected costs before we build."
+    },
+    {
+     "q": "Can AI work on our private data?",
+     "a": "Yes. Your documents are embedded into a private vector store; the model only sees retrieved snippets relevant to each question."
+    },
+    {
+     "q": "Do you train custom models?",
+     "a": "Rarely needed. Retrieval + good prompting beats fine-tuning for most business use cases at a fraction of the cost. We advise honestly on this."
+    },
+    {
+     "q": "How do you test AI features?",
+     "a": "With evaluation sets: curated question/answer pairs run against every prompt or model change, so regressions are caught automatically."
+    }
+   ],
+   "related": [
+    "ai-automations",
+    "ai-solutions",
+    "chatbot-development",
+    "rag-system-integration"
+   ]
+  },
+  {
+   "name": "AI Automations",
+   "slug": "ai-automations",
+   "category": "ai-automation",
+   "shortDescription": "Workflow automation across your tools — leads, tickets, notifications and data entry.",
+   "description": "We connect your apps and automate repetitive workflows — lead routing, ticket triage, follow-ups, reports and syncs — with AI handling the judgment calls.",
+   "tags": [
+    "n8n",
+    "Make",
+    "Webhooks",
+    "API Automation"
+   ],
+   "technologies": [
+    "n8n",
+    "Make",
+    "Zapier",
+    "Pipedream",
+    "OpenAI",
+    "Gemini",
+    "Claude",
+    "Webhooks",
+    "APIs"
+   ],
+   "faqs": [
+    {
+     "q": "What tools do you use for automation?",
+     "a": "n8n, Make and direct API/webhook integrations — chosen per task. We prefer tools your team can inspect and extend, not black boxes."
+    },
+    {
+     "q": "What can actually be automated?",
+     "a": "Lead capture and routing, follow-up sequences, ticket triage, data sync between tools, report generation, notifications, onboarding checklists — if it is rules plus judgment, it is a candidate."
+    },
+    {
+     "q": "What happens when an automation fails?",
+     "a": "Every flow has error handling: retries for transient failures, alerts to your team for real ones, and safe fallbacks so nothing silently breaks."
+    },
+    {
+     "q": "Can AI make decisions in the workflow?",
+     "a": "Yes, within guardrails — e.g. classifying intent or drafting replies that a human approves. High-stakes actions always require human confirmation."
+    },
+    {
+     "q": "Will we be locked into a platform?",
+     "a": "No. We document every flow and prefer portable patterns (webhooks, standard APIs) so you can migrate or self-host later."
+    },
+    {
+     "q": "How do you price automation work?",
+     "a": "Fixed scope per workflow bundle after a mapping session — no hourly meters running while we think."
+    }
+   ],
+   "related": [
+    "ai-solutions",
+    "ai-development",
+    "business-solutions",
+    "custom-crm-development"
+   ]
+  },
+  {
+   "name": "AI Solutions",
+   "slug": "ai-solutions",
+   "category": "ai-automation",
+   "shortDescription": "End-to-end AI programs — strategy, copilots, agents and business intelligence.",
+   "description": "Beyond single features: AI roadmaps, intelligent assistants, business-intelligence layers and agent systems designed around your operations and data maturity.",
+   "tags": [
+    "AI Strategy",
+    "Copilots",
+    "BI",
+    "Agents"
+   ],
+   "technologies": [
+    "OpenAI",
+    "Gemini",
+    "Claude",
+    "LangChain",
+    "LangGraph",
+    "LlamaIndex",
+    "Pinecone",
+    "Qdrant",
+    "Python"
+   ],
+   "faqs": [
+    {
+     "q": "We don’t know where to start with AI. Can you help?",
+     "a": "That is exactly what the opportunity assessment is for — a structured look at your workflows and data, ending in a ranked roadmap, not a sales pitch."
+    },
+    {
+     "q": "How is this different from AI Development?",
+     "a": "AI Development ships a specific feature. AI Solutions is the program around it: strategy, multiple use cases, data foundations and adoption across teams."
+    },
+    {
+     "q": "Will our data be used to train public models?",
+     "a": "No. We use API-based models with no-training data policies and private retrieval stores. Your data never trains anyone else’s model."
+    },
+    {
+     "q": "How do you measure success?",
+     "a": "Each slice gets success metrics up front — hours saved, response times, accuracy on eval sets — reviewed quarterly."
+    },
+    {
+     "q": "Can you work with our in-house team?",
+     "a": "Yes. We commonly pair with internal developers and hand over documented systems with training."
+    },
+    {
+     "q": "What does it cost?",
+     "a": "Assessment is a fixed-scope engagement; build slices are scoped per use case against the roadmap. No open-ended retainers required to start."
+    }
+   ],
+   "related": [
+    "ai-development",
+    "ai-automations",
+    "rag-system-integration",
+    "business-solutions"
+   ]
+  },
+  {
+   "name": "Chatbot Development",
+   "slug": "chatbot-development",
+   "category": "ai-automation",
+   "shortDescription": "AI website chatbots for support, leads and FAQs — with human handoff.",
+   "description": "We build website chatbots that answer from your knowledge base, capture leads, and hand off to humans gracefully — cutting support load while lifting conversions.",
+   "tags": [
+    "AI Chat",
+    "Lead Capture",
+    "FAQs",
+    "Handoff"
+   ],
+   "technologies": [
+    "OpenAI",
+    "Gemini",
+    "Claude",
+    "Dialogflow",
+    "Botpress",
+    "Rasa",
+    "LangChain",
+    "WhatsApp API",
+    "ElevenLabs"
+   ],
+   "faqs": [
+    {
+     "q": "Will the chatbot make up answers?",
+     "a": "No — it answers only from your knowledge base with retrieval grounding, and says so (then offers human contact) when it doesn’t know."
+    },
+    {
+     "q": "Can it capture leads?",
+     "a": "Yes. It collects contact details conversationally, scores intent from the dialogue, and pushes warm leads to your CRM or inbox instantly."
+    },
+    {
+     "q": "What happens when it can’t help?",
+     "a": "It hands off to your team with the full transcript, or takes a callback request — the visitor is never left hanging."
+    },
+    {
+     "q": "Can we update answers ourselves?",
+     "a": "Yes. You edit the knowledge base (docs/FAQs) and the bot picks up changes without code deploys."
+    },
+    {
+     "q": "Does it work on mobile?",
+     "a": "Yes — the widget is fully responsive and tested across phone and tablet viewports."
+    },
+    {
+     "q": "Can it integrate with our CRM?",
+     "a": "Yes — leads, transcripts and tags sync to your CRM or helpdesk, including custom CRMs we build."
+    }
+   ],
+   "related": [
+    "ai-development",
+    "rag-system-integration",
+    "ai-solutions",
+    "custom-crm-development"
+   ]
+  },
+  {
+   "name": "RAG System Integration",
+   "slug": "rag-system-integration",
+   "category": "ai-automation",
+   "shortDescription": "Retrieval-augmented generation over private docs with cited, current answers.",
+   "description": "We connect your documents to LLMs with embeddings and vector search — so teams and customers get accurate, cited answers from private company knowledge.",
+   "tags": [
+    "RAG",
+    "Vector DB",
+    "Embeddings",
+    "Semantic Search"
+   ],
+   "technologies": [
+    "LangChain",
+    "LlamaIndex",
+    "LangGraph",
+    "Pinecone",
+    "Qdrant",
+    "Weaviate",
+    "pgvector",
+    "OpenAI Embeddings"
+   ],
+   "faqs": [
+    {
+     "q": "What is RAG in simple terms?",
+     "a": "Instead of the AI answering from memory, it first looks up your documents (like a librarian) and then answers using what it found — with citations. Accurate and private."
+    },
+    {
+     "q": "What documents can it handle?",
+     "a": "PDFs, Word docs, wikis, help centers, tickets, sheets and most text sources. Scanned PDFs need OCR, which we include where required."
+    },
+    {
+     "q": "How do answers stay current?",
+     "a": "Documents are versioned and re-indexed on a schedule or on change. Stale chunks are replaced, never mixed in."
+    },
+    {
+     "q": "Is our data used to train AI models?",
+     "a": "No. Embeddings and retrieval stay in your private store; generation APIs are used with no-training data handling."
+    },
+    {
+     "q": "How do you measure answer quality?",
+     "a": "With a curated eval set of real questions and expected sources — precision/recall on retrieval plus answer faithfulness checks."
+    },
+    {
+     "q": "Can different teams see different documents?",
+     "a": "Yes. Access controls filter retrieval by role or team, so sensitive sets stay restricted."
+    }
+   ],
+   "related": [
+    "ai-development",
+    "chatbot-development",
+    "ai-solutions",
+    "ai-automations"
+   ]
+  },
+  {
+   "name": "Business Solutions",
+   "slug": "business-solutions",
+   "category": "business-enterprise",
+   "shortDescription": "Custom internal tools, dashboards and workflow digitization for operations.",
+   "description": "We digitize messy operations into clean internal tools — dashboards, approval flows, inventory trackers and integrations that replace spreadsheets and chat chaos.",
+   "tags": [
+    "Internal Tools",
+    "Dashboards",
+    "Workflows",
+    "Integrations"
+   ],
+   "technologies": [
+    "React.js",
+    "Node.js",
+    "PostgreSQL",
+    "Dashboards",
+    "Role-Based Access",
+    "Audit Logs",
+    "REST APIs",
+    "CSV Import/Export",
+    "Email Alerts"
+   ],
+   "faqs": [
+    {
+     "q": "What counts as a business solution?",
+     "a": "Any custom internal software: dashboards, approval systems, inventory trackers, scheduling tools, reporting portals — anything that replaces manual operational work."
+    },
+    {
+     "q": "Why not just use off-the-shelf software?",
+     "a": "When your process is standard, buy. When you constantly fight the tool with workarounds and per-seat costs, custom wins — we’ll tell you honestly which case you’re in."
+    },
+    {
+     "q": "Can you migrate our spreadsheet data?",
+     "a": "Yes. We clean, validate and import existing sheets, then verify totals match before go-live."
+    },
+    {
+     "q": "Who can access what?",
+     "a": "Role-based permissions throughout — e.g. staff see their tasks, managers see team views, admins see everything, with audit logs."
+    },
+    {
+     "q": "Can it integrate with our existing tools?",
+     "a": "Yes — accounting, WhatsApp/SMS, email, payment and common SaaS APIs via their official integrations."
+    },
+    {
+     "q": "Do you train our staff?",
+     "a": "Yes. Role-specific walkthroughs plus concise documentation, so adoption doesn’t depend on us."
+    }
+   ],
+   "related": [
+    "custom-crm-development",
+    "erp-development",
+    "saas-product-development",
+    "ai-automations"
+   ]
+  },
+  {
+   "name": "Custom CRM Development",
+   "slug": "custom-crm-development",
+   "category": "business-enterprise",
+   "shortDescription": "Lead pipelines, automation and reporting designed for how you actually sell.",
+   "description": "We build CRMs around your pipeline — lead capture, deal stages, sales automation, role permissions and reports that show the truth about your funnel.",
+   "tags": [
+    "Lead Management",
+    "Pipelines",
+    "Automation",
+    "Reports"
+   ],
+   "technologies": [
+    "React.js",
+    "Node.js",
+    "MongoDB",
+    "Pipelines",
+    "Automation Rules",
+    "Notifications",
+    "Meta/Google Ads Leads",
+    "WhatsApp API",
+    "Email Sync"
+   ],
+   "faqs": [
+    {
+     "q": "Can you build a CRM from scratch?",
+     "a": "Yes — that is the core offer. Pipeline, contacts, activities, automation, reports and permissions designed around your sales motion."
+    },
+    {
+     "q": "Can it integrate with our existing tools?",
+     "a": "Yes — ad lead forms, WhatsApp, email, calendars, billing and your website/chatbot all feed into one pipeline."
+    },
+    {
+     "q": "Can different roles have different permissions?",
+     "a": "Yes. Reps see their pipeline, managers see team performance, admins configure everything — with full audit trails."
+    },
+    {
+     "q": "Can workflows be automated?",
+     "a": "Yes — lead assignment, follow-up sequences, stage triggers, escalation rules and notification flows."
+    },
+    {
+     "q": "Can AI features be integrated?",
+     "a": "Yes. Lead scoring, conversation summaries and draft follow-ups can be added on top of the same data."
+    },
+    {
+     "q": "How long does a custom CRM take?",
+     "a": "A focused CRM (pipeline + automation + reports) typically takes 8–14 weeks. Larger multi-team rollouts are phased."
+    }
+   ],
+   "related": [
+    "business-solutions",
+    "erp-development",
+    "ai-automations",
+    "saas-product-development"
+   ]
+  },
+  {
+   "name": "ERP Development",
+   "slug": "erp-development",
+   "category": "business-enterprise",
+   "shortDescription": "Modular ERP covering finance, HR, inventory, sales and reporting.",
+   "description": "We build modular ERP systems — finance, HR, inventory, procurement and sales in one permissioned platform with the reports leadership actually reads.",
+   "tags": [
+    "Finance",
+    "Inventory",
+    "HR",
+    "Reporting"
+   ],
+   "technologies": [
+    "React.js",
+    "Node.js",
+    "PostgreSQL",
+    "Ledger",
+    "Inventory",
+    "Approvals",
+    "Audit Logs",
+    "Role-Based Permissions",
+    "Reports",
+    "CSV Export"
+   ],
+   "faqs": [
+    {
+     "q": "What modules can you build?",
+     "a": "Finance, HR and attendance, inventory, sales, procurement, and reporting — delivered as phases so you see value early."
+    },
+    {
+     "q": "Can you migrate our existing data?",
+     "a": "Yes — masters, opening balances, stock and employee records are cleaned, validated and imported with reconciliation checks."
+    },
+    {
+     "q": "How do permissions work?",
+     "a": "Granular role permissions per module and per action (view/create/approve), with full audit logs of who did what."
+    },
+    {
+     "q": "Will operations stop during rollout?",
+     "a": "No. We roll out module by module with parallel runs, so the business keeps operating throughout."
+    },
+    {
+     "q": "Can it handle multiple branches?",
+     "a": "Yes — branch-scoped data with consolidated head-office reporting is a standard pattern for us."
+    },
+    {
+     "q": "How long does ERP development take?",
+     "a": "A first module typically takes 10–16 weeks; full multi-module rollouts are phased over quarters."
+    }
+   ],
+   "related": [
+    "custom-crm-development",
+    "business-solutions",
+    "saas-product-development",
+    "ai-automations"
+   ]
+  },
+  {
+   "name": "SaaS Product Development",
+   "slug": "saas-product-development",
+   "category": "business-enterprise",
+   "shortDescription": "Multi-user SaaS with auth, billing, admin dashboards and analytics.",
+   "description": "We take SaaS ideas from architecture to paying customers — multi-tenancy, subscriptions, admin tooling, analytics and the cloud setup to scale them.",
+   "tags": [
+    "Multi-tenancy",
+    "Billing",
+    "Analytics",
+    "Admin"
+   ],
+   "technologies": [
+    "React.js",
+    "Next.js",
+    "Node.js",
+    "Stripe Billing",
+    "Multi-tenancy",
+    "Feature Flags",
+    "Product Analytics",
+    "Admin Dashboards",
+    "Email Automation"
+   ],
+   "faqs": [
+    {
+     "q": "How long does it take to launch a SaaS MVP?",
+     "a": "A focused single-tenant MVP typically takes 12–16 weeks including billing and onboarding. True multi-tenant scale adds phases."
+    },
+    {
+     "q": "How do subscriptions work?",
+     "a": "Stripe-powered plans with trials, coupons, upgrades/downgrades, proration and dunning for failed payments — all handled."
+    },
+    {
+     "q": "What is multi-tenancy?",
+     "a": "Serving many customers from one deployment while strictly isolating their data. We enforce isolation at the database layer with automated tests proving it."
+    },
+    {
+     "q": "Can you migrate our existing app to SaaS?",
+     "a": "Yes — we assess tenancy gaps, billing needs and onboarding, then migrate in phases without disrupting current users."
+    },
+    {
+     "q": "Do you help with pricing and packaging?",
+     "a": "We advise from experience (tiers, usage meters, trial design) while you make the final business call."
+    },
+    {
+     "q": "What happens after launch?",
+     "a": "Analytics reviews, onboarding optimization, feature flags for safe releases and a maintenance plan for scale."
+    }
+   ],
+   "related": [
+    "frontend-development",
+    "backend-development",
+    "custom-crm-development",
+    "ai-development"
+   ]
+  },
+  {
+   "name": "Digital Marketing",
+   "slug": "digital-marketing",
+   "category": "marketing",
+   "shortDescription": "SEO, AEO/GEO, content strategy and conversion optimization that grow organic traffic.",
+   "description": "We grow your search visibility with technical SEO, content strategy and conversion optimization — including AEO and GEO so AI search engines cite your business too.",
+   "tags": [
+    "SEO",
+    "AEO",
+    "GEO",
+    "Content Strategy"
+   ],
+   "technologies": [
+    "SEO Audits",
+    "Technical SEO",
+    "On-Page SEO",
+    "Local SEO",
+    "AEO",
+    "GEO",
+    "Content Strategy",
+    "Analytics",
+    "Conversion Optimization"
+   ],
+   "faqs": [
+    {
+     "q": "What digital marketing services do you provide?",
+     "a": "Technical SEO audits and fixes, keyword and content strategy, on-page optimization, local SEO, AEO/GEO for AI search, and conversion optimization — all reported monthly in plain language."
+    },
+    {
+     "q": "Do you provide SEO?",
+     "a": "Yes — technical, on-page, local and content-driven SEO. We fix foundations first, then build visibility that compounds."
+    },
+    {
+     "q": "What are AEO and GEO?",
+     "a": "Answer Engine Optimization and Generative Engine Optimization: making your content the cited source when AI assistants and generative search answer customer questions."
+    },
+    {
+     "q": "How long until we see results?",
+     "a": "Technical fixes often move metrics in 4–8 weeks; competitive keywords typically take 3–6 months of consistent work. We set expectations per keyword, not promises."
+    },
+    {
+     "q": "Do you guarantee first-page rankings?",
+     "a": "No — and you should distrust anyone who does. Rankings depend on search engines and competition; we maximize your eligibility and report honestly."
+    },
+    {
+     "q": "Do you provide social media promotion?",
+     "a": "Yes — see our Social Media Promotion service for content, campaigns and community growth across major platforms."
+    }
+   ],
+   "related": [
+    "social-media-promotion",
+    "frontend-development",
+    "business-solutions",
+    "saas-product-development"
+   ]
+  },
+  {
+   "name": "Social Media Promotion",
+   "slug": "social-media-promotion",
+   "category": "marketing",
+   "shortDescription": "Content, campaigns and community growth across Facebook, Instagram and LinkedIn.",
+   "description": "We run your social presence end to end — content calendars, creatives, campaigns and community management on the platforms where your customers spend time.",
+   "tags": [
+    "Facebook",
+    "Instagram",
+    "LinkedIn",
+    "Content"
+   ],
+   "technologies": [
+    "Facebook Marketing",
+    "Instagram Marketing",
+    "LinkedIn Marketing",
+    "Content Calendars",
+    "Paid Social Campaigns",
+    "Community Management",
+    "Social Analytics"
+   ],
+   "faqs": [
+    {
+     "q": "Which platforms do you manage?",
+     "a": "Facebook, Instagram and LinkedIn — the channels where most B2B and local B2C buying decisions get researched. We recommend the mix per business, not all three by default."
+    },
+    {
+     "q": "Do you create the content?",
+     "a": "Yes — calendar, copy, creatives and scheduling are all included. You approve the monthly plan; we handle execution."
+    },
+    {
+     "q": "Do you run paid campaigns?",
+     "a": "Yes, where the numbers justify it: boosting proven organic posts and running targeted lead or awareness campaigns with clear budgets."
+    },
+    {
+     "q": "How do you report results?",
+     "a": "Monthly: reach, engagement, follower quality, profile visits, website clicks and leads — tied back to the content that produced them."
+    },
+    {
+     "q": "Can you handle customer messages?",
+     "a": "Yes — comment moderation and inbox replies within agreed hours, with escalation rules for sensitive issues."
+    },
+    {
+     "q": "Do you also do SEO?",
+     "a": "Yes — our Digital Marketing service covers technical SEO, content and AI-search visibility, which pairs naturally with social."
+    }
+   ],
+   "related": [
+    "digital-marketing",
+    "business-solutions",
+    "frontend-development",
+    "ai-automations"
+   ]
+  }
+ ]
+}

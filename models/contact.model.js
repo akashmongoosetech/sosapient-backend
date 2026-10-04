@@ -45,6 +45,12 @@ const contactSchema = new mongoose.Schema({
     type: String,
     enum: ['new', 'read', 'replied', 'archived'],
     default: 'new'
+  },
+  source: {
+    type: String,
+    trim: true,
+    maxlength: [40, 'Source must be at most 40 characters'],
+    default: 'general'
   }
 }, {
   timestamps: true

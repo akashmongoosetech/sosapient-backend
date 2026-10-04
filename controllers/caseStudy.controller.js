@@ -210,6 +210,11 @@ async function createCaseStudy(req, res) {
         throw saveError;
       }
     }
+    try {
+      require('../services/ragIndex').queueCaseStudyIndex(doc);
+    } catch (e) {
+      // indexing is best-effort only
+    }
     return res.status(201).json({ success: true, message: 'Case study created successfully', data: doc });
   } catch (error) {
     if (error && error.status) return sendError(res, error.status, error.message, error);
@@ -398,6 +403,11 @@ async function updateCaseStudy(req, res) {
     if (!doc) {
       return res.status(404).json({ success: false, message: 'Case study not found' });
     }
+    try {
+      require('../services/ragIndex').queueCaseStudyIndex(doc);
+    } catch (e) {
+      // indexing is best-effort only
+    }
     return res.json({ success: true, message: 'Case study updated successfully', data: doc });
   } catch (error) {
     if (error && error.status) return sendError(res, error.status, error.message, error);
@@ -424,6 +434,11 @@ async function deleteCaseStudy(req, res) {
     const doc = await CaseStudy.findByIdAndDelete(id);
     if (!doc) {
       return res.status(404).json({ success: false, message: 'Case study not found' });
+    }
+    try {
+      require('../services/ragIndex').queueCaseStudyRemove(id);
+    } catch (e) {
+      // indexing is best-effort only
     }
     return res.json({ success: true, message: 'Case study deleted successfully' });
   } catch (error) {

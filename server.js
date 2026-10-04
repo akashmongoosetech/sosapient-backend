@@ -103,6 +103,8 @@ app.use('/api/copilotkit', copilotKitRoutes);
 app.use('/api', subscriberRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/case-studies', caseStudyRoutes);
+const chatbotRoutes = require('./routes/chatbot.routes');
+app.use('/api/chatbot', chatbotRoutes);
 
 // 404 for unknown API routes
 app.use('/api', (req, res) => {
