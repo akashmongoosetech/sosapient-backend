@@ -44,7 +44,9 @@ async function sitemap(req, res) {
       'ai-solutions',
       'chatbot-development',
       'rag-system-integration',
-      'saas-product-development'
+      'saas-product-development',
+      'digital-marketing',
+      'social-media-promotion'
     ];
     const cases = await CaseStudy.find({ published: true })
       .select('slug updatedAt')
@@ -52,6 +54,8 @@ async function sitemap(req, res) {
       .lean();
     const urls = [
       { loc: `${base}/`, changefreq: 'daily', priority: '1.0' },
+      { loc: `${base}/about`, changefreq: 'monthly', priority: '0.7' },
+      { loc: `${base}/contact`, changefreq: 'monthly', priority: '0.7' },
       { loc: `${base}/blog`, changefreq: 'daily', priority: '0.9' },
       { loc: `${base}/services`, changefreq: 'weekly', priority: '0.9' },
       { loc: `${base}/case-studies`, changefreq: 'weekly', priority: '0.9' },
