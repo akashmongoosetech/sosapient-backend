@@ -78,6 +78,7 @@ const chatRoutes = require('./routes/chat.routes');
 const copilotKitRoutes = require('./routes/copilotkit.routes');
 const jobRoutes = require('./routes/job.routes');
 const caseStudyRoutes = require('./routes/caseStudy.routes');
+const certificateRoutes = require('./routes/certificate.routes');
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -103,6 +104,7 @@ app.use('/api/copilotkit', copilotKitRoutes);
 app.use('/api', subscriberRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/case-studies', caseStudyRoutes);
+app.use('/api/certificates', certificateRoutes);
 const chatbotRoutes = require('./routes/chatbot.routes');
 app.use('/api/chatbot', chatbotRoutes);
 
