@@ -1,4 +1,15 @@
 const Job = require('../models/job.model');
+const { sanitizeRichField } = require('../utils/sanitizeRichHtml');
+
+// Rich-text job fields: sanitize untrusted editor HTML before persistence.
+const RICH_FIELDS = ['description', 'requirements', 'responsibilities', 'benefits'];
+
+function sanitizeJobFields(picked) {
+  for (const key of RICH_FIELDS) {
+    if (picked[key] !== undefined) picked[key] = sanitizeRichField(picked[key]);
+  }
+  return picked;
+}
 
 function errMessage(error, fallback) {
   return process.env.NODE_ENV === 'production' ? fallback : (error.message || fallback);
@@ -16,7 +27,7 @@ function pickJob(body = {}) {
 // Create a new job posting
 const createJob = async (req, res) => {
   try {
-    const job = await Job.create(pickJob(req.body));
+    const job = await Job.create(sanitizeJobFields(pickJob(req.body)));
     res.status(201).json({ success: true, data: job });
   } catch (error) {
     res.status(400).json({ success: false, message: errMessage(error, 'Error creating job') });
@@ -52,7 +63,7 @@ const getJobById = async (req, res) => {
 // Update job
 const updateJob = async (req, res) => {
   try {
-    const job = await Job.findByIdAndUpdate(req.params.id, pickJob(req.body), { new: true, runValidators: true });
+    const job = await Job.findByIdAndUpdate(req.params.id, sanitizeJobFields(pickJob(req.body)), { new: true, runValidators: true });
     if (!job) return res.status(404).json({ success: false, message: 'Job not found' });
     res.json({ success: true, data: job });
   } catch (error) {
