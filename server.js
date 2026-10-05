@@ -43,6 +43,11 @@ app.use(cors({
   credentials: true
 }));
 
+// Leads CRM accepts large JSON imports — mounted before the global 1mb body
+// parsers; its router applies a scoped 10mb JSON limit instead.
+const leadRoutesEarly = require('./routes/lead.routes');
+app.use('/api/leads', leadRoutesEarly);
+
 // Body parsers: keep global limits small; blog image/content uploads use multipart (multer) limits instead
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
