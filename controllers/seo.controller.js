@@ -52,12 +52,32 @@ async function sitemap(req, res) {
       .select('slug updatedAt')
       .sort({ updatedAt: -1 })
       .lean();
+    const industrySlugs = [
+      'healthcare-telehealth',
+      'ecommerce-retail',
+      'manufacturing-logistics',
+      'education-edtech',
+      'artificial-intelligence-automation',
+      'cloud-devops',
+      'cybersecurity',
+      'proptech-real-estate',
+      'travel-hospitality-tourism',
+      'gaming-esports',
+      'hrtech-workforce-management',
+      'professional-services-legaltech',
+      'media-entertainment',
+      'logistics-supply-chain',
+      'custom-enterprise-web-apps',
+      'api-integration-performance-optimization',
+      'business-process-automation'
+    ];
     const urls = [
       { loc: `${base}/`, changefreq: 'daily', priority: '1.0' },
       { loc: `${base}/about`, changefreq: 'monthly', priority: '0.7' },
       { loc: `${base}/contact`, changefreq: 'monthly', priority: '0.7' },
       { loc: `${base}/blog`, changefreq: 'daily', priority: '0.9' },
       { loc: `${base}/services`, changefreq: 'weekly', priority: '0.9' },
+      { loc: `${base}/industries`, changefreq: 'weekly', priority: '0.9' },
       { loc: `${base}/case-studies`, changefreq: 'weekly', priority: '0.9' },
       ...cases.map((c) => ({
         loc: `${base}/case-studies/${c.slug}`,
@@ -67,6 +87,11 @@ async function sitemap(req, res) {
       })),
       ...serviceSlugs.map((slug) => ({
         loc: `${base}/services/${slug}`,
+        changefreq: 'monthly',
+        priority: '0.8'
+      })),
+      ...industrySlugs.map((slug) => ({
+        loc: `${base}/industries/${slug}`,
         changefreq: 'monthly',
         priority: '0.8'
       })),
@@ -99,6 +124,8 @@ function robots(req, res) {
     'Allow: /blog/*',
     'Allow: /services',
     'Allow: /services/*',
+    'Allow: /industries',
+    'Allow: /industries/*',
     'Allow: /case-studies',
     'Allow: /case-studies/*',
     'Disallow: /admin',
