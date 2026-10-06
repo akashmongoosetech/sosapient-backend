@@ -159,4 +159,105 @@ async function logout(req, res) {
   return res.json({ success: true, message: 'Logged out successfully' });
 }
 
-module.exports = { signup, login, me, logout };
+// PUT /api/auth/me — self profile update. Only profile fields are writable;
+// role, passwordHash and any other field in the body are ignored.
+async function updateMe(req, res) {
+  try {
+    const user = await User.findById(req.auth.userId);
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Unauthorized: user not found' });
+    }
+    const body = req.body || {};
+    if (body.firstName !== undefined) {
+      const v = String(body.firstName).trim();
+      if (v.length < 2 || v.length > 50) {
+        return res.status(400).json({ success: false, message: 'First name is required (2-50 characters)' });
+      }
+      user.firstName = v;
+    }
+    if (body.lastName !== undefined) {
+      const v = String(body.lastName).trim();
+      if (v.length < 2 || v.length > 50) {
+        return res.status(400).json({ success: false, message: 'Last name is required (2-50 characters)' });
+      }
+      user.lastName = v;
+    }
+    if (body.username !== undefined) {
+      const v = String(body.username).trim().toLowerCase();
+      if (!/^[a-z0-9_.]{3,30}$/.test(v)) {
+        return res.status(400).json({ success: false, message: 'Username is required (3-30 chars: letters, numbers, dot, underscore)' });
+      }
+      user.username = v;
+    }
+    if (body.email !== undefined) {
+      const v = String(body.email).trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) || v.length > 160) {
+        return res.status(400).json({ success: false, message: 'A valid email address is required' });
+      }
+      user.email = v;
+    }
+    if (body.mobile !== undefined) {
+      const v = normalizeMobile(body.mobile);
+      if (!isValidMobile(v)) {
+        return res.status(400).json({ success: false, message: 'A valid mobile number is required' });
+      }
+      user.mobile = v;
+    }
+    if (body.profilePic !== undefined) {
+      const v = String(body.profilePic).trim();
+      if (v !== '' && !isValidUrl(v)) {
+        return res.status(400).json({ success: false, message: 'Invalid profile picture URL' });
+      }
+      user.profilePic = v;
+    }
+    await user.save();
+    return res.json({ success: true, message: 'Profile updated successfully', user: safeUser(user) });
+  } catch (error) {
+    if (error && error.code === 11000) {
+      const field = Object.keys(error.keyPattern || {})[0] || 'field';
+      return res.status(409).json({ success: false, message: `${field} already exists` });
+    }
+    if (error && error.name === 'ValidationError') {
+      return res.status(400).json({ success: false, message: 'Validation failed' });
+    }
+    return res.status(500).json({ success: false, message: 'Error updating profile' });
+  }
+}
+
+// PUT /api/auth/password — self password change. Verifies the current
+// password, then hashes and stores the new one. Existing JWTs stay valid
+// until expiry (stateless auth, same as logout).
+async function changePassword(req, res) {
+  try {
+    const { currentPassword, newPassword, confirmPassword } = req.body || {};
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      return res.status(400).json({ success: false, message: 'Current, new and confirm passwords are required' });
+    }
+    const user = await User.findById(req.auth.userId).select('+passwordHash');
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Unauthorized: user not found' });
+    }
+    const ok = await bcrypt.compare(String(currentPassword), user.passwordHash);
+    if (!ok) {
+      return res.status(401).json({ success: false, message: 'Current password is incorrect' });
+    }
+    if (String(newPassword).length < 8 || String(newPassword).length > 128) {
+      return res.status(400).json({ success: false, message: 'New password must be at least 8 characters' });
+    }
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({ success: false, message: 'New passwords do not match' });
+    }
+    const same = await bcrypt.compare(String(newPassword), user.passwordHash);
+    if (same) {
+      return res.status(400).json({ success: false, message: 'New password must be different from the current password' });
+    }
+    const bcryptRounds = process.env.NODE_ENV === 'production' ? 12 : 10;
+    user.passwordHash = await bcrypt.hash(String(newPassword), bcryptRounds);
+    await user.save();
+    return res.json({ success: true, message: 'Password changed successfully' });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Error changing password' });
+  }
+}
+
+module.exports = { signup, login, me, logout, updateMe, changePassword };

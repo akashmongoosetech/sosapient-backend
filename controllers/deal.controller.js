@@ -665,22 +665,39 @@ async function streamAttachment(req, res) {
     // NOTE: no .lean() here on purpose. Lean queries return BSON Binary
     // objects for Buffer paths, which Express JSON-serializes (base64 text)
     // instead of sending raw bytes. Hydrated docs give real Buffers.
-    const byReq = await Deal.findOne(
-      { 'requirements.attachments._id': attId },
-      { 'requirements.attachments.$': 1 }
-    );
-    const byRep = byReq
-      ? null
-      : await Deal.findOne(
-          { 'reports.attachments._id': attId },
-          { 'reports.attachments.$': 1 }
-        );
-    const holder = byReq
-      ? (byReq.requirements || [])[0]
-      : byRep
-        ? (byRep.reports || [])[0]
-        : null;
-    const file = holder && Array.isArray(holder.attachments) ? holder.attachments[0] : null;
+    // NOTE: MongoDB positional `$` projection does NOT work on nested arrays:
+    // `requirements.attachments.$` always yields the first attachment, so a
+    // previous version of this endpoint served the WRONG file whenever an
+    // item held more than one attachment. Isolate the exact subdocument with
+    // aggregation $filter instead.
+    const oid = new mongoose.Types.ObjectId(attId);
+    const matches = await Deal.aggregate([
+      {
+        $match: {
+          $or: [{ 'requirements.attachments._id': oid }, { 'reports.attachments._id': oid }],
+        },
+      },
+      {
+        $project: {
+          req: {
+            $filter: { input: '$requirements', as: 'r', cond: { $in: [oid, '$$r.attachments._id'] } },
+          },
+          rep: {
+            $filter: { input: '$reports', as: 'r', cond: { $in: [oid, '$$r.attachments._id'] } },
+          },
+        },
+      },
+    ]);
+    const hit = matches && matches[0];
+    const items = [...((hit && hit.req) || []), ...((hit && hit.rep) || [])];
+    let file = null;
+    for (const item of items) {
+      const found = (item.attachments || []).find((a) => String(a._id) === attId);
+      if (found) {
+        file = found;
+        break;
+      }
+    }
     const bytes = toResponseBytes(file && file.data);
     if (!file || !bytes || bytes.length === 0) {
       return res.status(404).json({ success: false, message: 'Attachment not found' });
