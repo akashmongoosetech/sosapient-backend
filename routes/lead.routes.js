@@ -10,6 +10,7 @@ const {
   updateLead,
   setLeadStatus,
   deleteLead,
+  bulkDeleteLeads,
   previewImport,
   importLeads,
 } = require('../controllers/lead.controller');
@@ -30,6 +31,7 @@ router.post('/', rateLimit({ windowMs: 60000, max: 60 }), createLead);
 router.get('/:id', getLeadById);
 router.put('/:id', rateLimit({ windowMs: 60000, max: 60 }), updateLead);
 router.patch('/:id/status', setLeadStatus);
+router.post('/bulk-delete', rateLimit({ windowMs: 60000, max: 10 }), bulkDeleteLeads);
 router.delete('/:id', deleteLead);
 
 module.exports = router;

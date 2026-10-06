@@ -275,6 +275,37 @@ async function deleteLead(req, res) {
   }
 }
 
+const MAX_BULK_DELETE = 200;
+
+// POST /api/leads/bulk-delete — body { ids: [...] }.
+// Deletes ONLY the explicitly listed IDs (page-scoped by the frontend).
+// Individual delete has no hooks/cleanup/audit, so a single deleteMany
+// bypasses no business logic.
+async function bulkDeleteLeads(req, res) {
+  try {
+    const ids = req.body && req.body.ids;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ success: false, message: 'Provide a non-empty array of lead IDs' });
+    }
+    if (ids.length > MAX_BULK_DELETE) {
+      return res.status(400).json({ success: false, message: `Too many IDs. Maximum ${MAX_BULK_DELETE} per request.` });
+    }
+    const unique = [...new Set(ids.filter((v) => typeof v === 'string' && isValidId(v)))];
+    if (unique.length === 0) {
+      return res.status(400).json({ success: false, message: 'No valid lead IDs provided' });
+    }
+    const result = await Lead.deleteMany({ _id: { $in: unique } });
+    const deletedCount = typeof result.deletedCount === 'number' ? result.deletedCount : 0;
+    return res.json({
+      success: true,
+      message: deletedCount === 1 ? '1 lead deleted successfully' : `${deletedCount} leads deleted successfully`,
+      deletedCount,
+    });
+  } catch (error) {
+    return sendError(res, 500, 'Failed to delete leads.', error);
+  }
+}
+
 const MAX_IMPORT_RECORDS = 5000;
 const PREVIEW_ROW_CAP = 200;
 
@@ -484,6 +515,7 @@ module.exports = {
   updateLead,
   setLeadStatus,
   deleteLead,
+  bulkDeleteLeads,
   previewImport,
   importLeads,
 };
