@@ -110,6 +110,8 @@ app.use('/api', subscriberRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/case-studies', caseStudyRoutes);
 app.use('/api/certificates', certificateRoutes);
+const dealRoutes = require('./routes/deal.routes');
+app.use('/api/deals', dealRoutes);
 const chatbotRoutes = require('./routes/chatbot.routes');
 app.use('/api/chatbot', chatbotRoutes);
 

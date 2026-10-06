@@ -12,6 +12,14 @@ const leadSchema = new mongoose.Schema(
     phone: { type: String, trim: true, maxlength: [40, 'Phone must be at most 40 characters'], default: '' },
     phoneUnformatted: { type: String, trim: true, maxlength: [40, 'Phone must be at most 40 characters'], default: '' },
     status: { type: String, enum: LEAD_STATUSES, default: 'New', index: true },
+    // Set when this lead was successfully moved to Deals. A Converted lead
+    // WITHOUT a dealId failed conversion and must stay visible/retryable.
+    dealId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Deal',
+      default: null,
+      index: true,
+    },
     // Internal normalized keys for duplicate detection. Never exposed via API.
     phoneKey: { type: String, trim: true, default: '', select: false, index: true },
     websiteKey: { type: String, trim: true, default: '', select: false, index: true },

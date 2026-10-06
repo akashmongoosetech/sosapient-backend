@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const Lead = require('../models/lead.model');
+const { convertLeadToDeal } = require('../utils/dealConversion');
 const {
   LEAD_STATUSES,
   pickLead,
@@ -60,8 +61,18 @@ async function getLeads(req, res) {
     const limit = clampInt(req.query.limit, 25, 1, 200);
     const filter = {};
 
-    if (req.query.status && LEAD_STATUSES.includes(String(req.query.status))) {
+    const explicitStatus = req.query.status && LEAD_STATUSES.includes(String(req.query.status));
+    if (explicitStatus) {
       filter.status = String(req.query.status);
+    }
+    // Visibility rule (backend-enforced): successfully moved leads live in
+    // Deals, not here. Excludes Converted leads that HAVE a deal. Converted
+    // leads WITHOUT a deal failed conversion and stay visible/retryable.
+    // Explicit ?status= or ?includeConverted=true opts out of the exclusion.
+    if (!explicitStatus && req.query.includeConverted !== 'true') {
+      filter.$and = (filter.$and || []).concat([
+        { $or: [{ status: { $ne: 'Converted' } }, { dealId: null }, { dealId: { $exists: false } }] },
+      ]);
     }
     if (req.query.city && String(req.query.city).trim() !== '') {
       filter.city = new RegExp(`^${escapeRegExp(String(req.query.city).trim())}$`, 'i');
@@ -127,12 +138,18 @@ async function getLeads(req, res) {
   }
 }
 
-// GET /api/leads/filter-options — distinct cities + categories
+// GET /api/leads/filter-options — distinct cities + categories.
+// Scoped to visible leads (moved Converted rows excluded) unless
+// ?includeConverted=true.
 async function getFilterOptions(req, res) {
   try {
+    const scope =
+      req.query.includeConverted === 'true'
+        ? {}
+        : { $or: [{ status: { $ne: 'Converted' } }, { dealId: null }, { dealId: { $exists: false } }] };
     const [cities, categories] = await Promise.all([
-      Lead.distinct('city'),
-      Lead.distinct('categoryName'),
+      Lead.distinct('city', scope),
+      Lead.distinct('categoryName', scope),
     ]);
     const clean = (arr) =>
       arr
@@ -145,23 +162,31 @@ async function getFilterOptions(req, res) {
   }
 }
 
-// GET /api/leads/stats
+// GET /api/leads/stats — counts over visible leads (moved Converted rows
+// excluded) unless ?includeConverted=true. byStatus omits Converted unless
+// opted in; movedToDeals reports how many converted leads have deals.
 async function getStats(req, res) {
   try {
-    const [total, byStatus, withMobile, withWebsite] = await Promise.all([
-      Lead.countDocuments({}),
-      Lead.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
-      Lead.countDocuments({
-        $or: [{ phone: { $nin: ['', null] } }, { phoneUnformatted: { $nin: ['', null] } }],
-      }),
-      Lead.countDocuments({ website: { $nin: ['', null] } }),
+    const includeConverted = req.query.includeConverted === 'true';
+    const scope = includeConverted
+      ? {}
+      : { $or: [{ status: { $ne: 'Converted' } }, { dealId: null }, { dealId: { $exists: false } }] };
+    const matchScope = (extra) => (Object.keys(scope).length > 0 ? { $and: [scope, extra] } : extra);
+    const [total, byStatus, withMobile, withWebsite, movedToDeals] = await Promise.all([
+      Lead.countDocuments(scope),
+      Lead.aggregate([{ $match: scope }, { $group: { _id: '$status', count: { $sum: 1 } } }]),
+      Lead.countDocuments(
+        matchScope({ $or: [{ phone: { $nin: ['', null] } }, { phoneUnformatted: { $nin: ['', null] } }] })
+      ),
+      Lead.countDocuments(matchScope({ website: { $nin: ['', null] } })),
+      Lead.countDocuments({ status: 'Converted', dealId: { $ne: null } }),
     ]);
     const statusCounts = {};
     for (const s of LEAD_STATUSES) statusCounts[s] = 0;
     for (const row of byStatus) {
       if (row._id && statusCounts[row._id] !== undefined) statusCounts[row._id] = row.count;
     }
-    return res.json({ success: true, data: { total, byStatus: statusCounts, withMobile, withWebsite } });
+    return res.json({ success: true, data: { total, byStatus: statusCounts, withMobile, withWebsite, movedToDeals } });
   } catch (error) {
     return sendError(res, 500, 'Failed to load lead statistics.', error);
   }
@@ -228,6 +253,28 @@ async function updateLead(req, res) {
     if (!doc) {
       return res.status(404).json({ success: false, message: 'Lead not found' });
     }
+    // Same backend-driven conversion as the status endpoint: a PUT that
+    // lands the lead on Converted must also ensure its deal exists.
+    if (doc.status === 'Converted' && !doc.dealId) {
+      try {
+        const { deal, created } = await convertLeadToDeal(doc);
+        doc.dealId = deal._id;
+        return res.json({
+          success: true,
+          message: created ? 'Lead updated and converted successfully. Deal created.' : 'Lead updated successfully.',
+          data: publicDoc(doc),
+          deal,
+        });
+      } catch (conversionError) {
+        return res.status(200).json({
+          success: true,
+          message: 'Lead updated successfully.',
+          data: publicDoc(doc),
+          dealError: 'Deal could not be created automatically. Please retry conversion.',
+          error: errDetail(conversionError),
+        });
+      }
+    }
     return res.json({ success: true, message: 'Lead updated successfully', data: publicDoc(doc) });
   } catch (error) {
     if (error && error.name === 'ValidationError') {
@@ -252,9 +299,61 @@ async function setLeadStatus(req, res) {
     if (!doc) {
       return res.status(404).json({ success: false, message: 'Lead not found' });
     }
+    // Automatic Lead -> Deal conversion, controlled by the backend.
+    // The lead update above has already succeeded; if deal creation fails
+    // the lead is kept safely and the error is surfaced for retry.
+    if (status === 'Converted') {
+      try {
+        const { deal, created } = await convertLeadToDeal(doc);
+        doc.dealId = deal._id;
+        return res.json({
+          success: true,
+          message: created ? 'Lead converted successfully. Deal created.' : 'Lead converted successfully.',
+          data: publicDoc(doc),
+          deal,
+        });
+      } catch (conversionError) {
+        return res.status(200).json({
+          success: true,
+          message: 'Lead status set to Converted.',
+          data: publicDoc(doc),
+          dealError: 'Deal could not be created automatically. Please retry conversion.',
+          error: errDetail(conversionError),
+        });
+      }
+    }
     return res.json({ success: true, message: `Lead status set to ${status}`, data: publicDoc(doc) });
   } catch (error) {
     return sendError(res, 500, 'Failed to update lead status.', error);
+  }
+}
+
+// POST /api/leads/:id/convert — explicit (re)try of Lead -> Deal conversion.
+// Idempotent: returns the existing deal when one already references the lead.
+async function convertLead(req, res) {
+  try {
+    const id = String(req.params.id || '');
+    if (!isValidId(id)) {
+      return res.status(400).json({ success: false, message: 'Invalid lead ID' });
+    }
+    const doc = await Lead.findById(id).lean();
+    if (!doc) {
+      return res.status(404).json({ success: false, message: 'Lead not found' });
+    }
+    try {
+      const { deal, created } = await convertLeadToDeal(doc);
+      doc.dealId = deal._id;
+      return res.json({
+        success: true,
+        message: created ? 'Deal created successfully.' : 'Deal already exists for this lead.',
+        data: publicDoc(doc),
+        deal,
+      });
+    } catch (conversionError) {
+      return sendError(res, 500, 'Deal could not be created. Please try again.', conversionError);
+    }
+  } catch (error) {
+    return sendError(res, 500, 'Failed to convert lead.', error);
   }
 }
 
@@ -514,6 +613,7 @@ module.exports = {
   createLead,
   updateLead,
   setLeadStatus,
+  convertLead,
   deleteLead,
   bulkDeleteLeads,
   previewImport,

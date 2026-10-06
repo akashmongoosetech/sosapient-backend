@@ -9,6 +9,7 @@ const {
   createLead,
   updateLead,
   setLeadStatus,
+  convertLead,
   deleteLead,
   bulkDeleteLeads,
   previewImport,
@@ -31,6 +32,7 @@ router.post('/', rateLimit({ windowMs: 60000, max: 60 }), createLead);
 router.get('/:id', getLeadById);
 router.put('/:id', rateLimit({ windowMs: 60000, max: 60 }), updateLead);
 router.patch('/:id/status', setLeadStatus);
+router.post('/:id/convert', rateLimit({ windowMs: 60000, max: 20 }), convertLead);
 router.post('/bulk-delete', rateLimit({ windowMs: 60000, max: 10 }), bulkDeleteLeads);
 router.delete('/:id', deleteLead);
 
