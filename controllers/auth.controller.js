@@ -1,17 +1,57 @@
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
-function signToken(user) {
+function getJwtSecret() {
   const secret = process.env.JWT_SECRET;
-  if (!secret || secret === 'your-jwt-secret-key-here') {
+  if (!secret || secret === 'your-jwt-secret-key-here' || secret.length < 32) {
     throw new Error('JWT_SECRET is not configured securely');
   }
+  return secret;
+}
+
+function signAccessToken(user) {
   return jwt.sign(
-    { sub: String(user._id), role: user.role },
-    secret,
-    { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+    { sub: String(user._id), role: user.role, tv: user.tokenVersion || 0, type: 'access' },
+    getJwtSecret(),
+    { expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m' }
   );
+}
+
+function signRefreshToken(user) {
+  return jwt.sign(
+    { sub: String(user._id), tv: user.tokenVersion || 0, type: 'refresh' },
+    getJwtSecret(),
+    { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d' }
+  );
+}
+
+// Legacy: 7d access for backward compat during rollout (no tv/type). New code uses short access + refresh.
+function signToken(user) {
+  return signAccessToken(user);
+}
+
+function hashRefresh(token) {
+  return crypto.createHash('sha256').update(String(token)).digest('hex');
+}
+
+async function issueRefresh(user) {
+  const refreshToken = signRefreshToken(user);
+  const hash = hashRefresh(refreshToken);
+  const decoded = jwt.decode(refreshToken);
+  const expiresAt = decoded && decoded.exp ? new Date(decoded.exp * 1000) : new Date(Date.now() + 7 * 24 * 3600 * 1000);
+  const fresh = await User.findById(user._id).select('+refreshTokens');
+  if (fresh) {
+    fresh.refreshTokens = (fresh.refreshTokens || []).filter((r) => r.expiresAt && r.expiresAt > new Date());
+    fresh.refreshTokens.push({ hash, createdAt: new Date(), expiresAt });
+    // Cap devices: keep latest 5
+    if (fresh.refreshTokens.length > 5) {
+      fresh.refreshTokens = fresh.refreshTokens.slice(-5);
+    }
+    await fresh.save();
+  }
+  return refreshToken;
 }
 
 function isValidUrl(value) {
@@ -89,8 +129,9 @@ async function signup(req, res) {
       role: 'USER'
     });
     await user.save();
-    const token = signToken(user);
-    return res.status(201).json({ success: true, message: 'Signup successful', token, user: safeUser(user) });
+    const token = signAccessToken(user);
+    const refreshToken = await issueRefresh(user);
+    return res.status(201).json({ success: true, message: 'Signup successful', token, refreshToken, user: safeUser(user) });
   } catch (error) {
     if (error && error.code === 11000) {
       const field = Object.keys(error.keyPattern || {})[0] || 'field';
@@ -140,9 +181,10 @@ async function login(req, res) {
     if (!ok) {
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
     }
-    const token = signToken(user);
+    const token = signAccessToken(user);
+    const refreshToken = await issueRefresh(user);
     const safe = user.toSafeJSON();
-    return res.json({ success: true, message: 'Login successful', token, user: safe });
+    return res.json({ success: true, message: 'Login successful', token, refreshToken, user: safe });
   } catch (error) {
     if (error && error.message === 'JWT_SECRET is not configured securely') {
       return res.status(500).json({ success: false, message: 'Authentication is not configured' });
@@ -156,7 +198,57 @@ async function me(req, res) {
 }
 
 async function logout(req, res) {
+  try {
+    // Invalidate this device's refresh token if supplied; access expires in 15m.
+    const { refreshToken } = req.body || {};
+    if (refreshToken && req.auth && req.auth.userId) {
+      const hash = hashRefresh(refreshToken);
+      await User.updateOne({ _id: req.auth.userId }, { $pull: { refreshTokens: { hash } } });
+    }
+  } catch {
+    /* best-effort */
+  }
   return res.json({ success: true, message: 'Logged out successfully' });
+}
+
+// POST /api/auth/refresh — rotating refresh: consumes old, issues new pair. Reuse detected → wipe all.
+async function refresh(req, res) {
+  try {
+    const { refreshToken } = req.body || {};
+    if (!refreshToken) {
+      return res.status(400).json({ success: false, message: 'Refresh token is required' });
+    }
+    let payload;
+    try {
+      payload = jwt.verify(String(refreshToken), getJwtSecret());
+    } catch {
+      return res.status(401).json({ success: false, message: 'Invalid or expired refresh token' });
+    }
+    if (payload.type !== 'refresh' || !payload.sub) {
+      return res.status(401).json({ success: false, message: 'Invalid refresh token' });
+    }
+    const user = await User.findById(payload.sub).select('+refreshTokens +passwordHash');
+    if (!user || (user.tokenVersion || 0) !== (payload.tv || 0)) {
+      return res.status(401).json({ success: false, message: 'Refresh token revoked' });
+    }
+    const hash = hashRefresh(refreshToken);
+    const found = (user.refreshTokens || []).find((r) => r.hash === hash);
+    if (!found) {
+      // Possible reuse: revoke all sessions for safety
+      user.refreshTokens = [];
+      user.tokenVersion = (user.tokenVersion || 0) + 1;
+      await user.save();
+      return res.status(401).json({ success: false, message: 'Refresh token reused' });
+    }
+    // Rotate: drop old, issue new
+    user.refreshTokens = (user.refreshTokens || []).filter((r) => r.hash !== hash && r.expiresAt > new Date());
+    await user.save();
+    const token = signAccessToken(user);
+    const nextRefresh = await issueRefresh(user);
+    return res.json({ success: true, token, refreshToken: nextRefresh, user: safeUser(user) });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Error refreshing session' });
+  }
 }
 
 // PUT /api/auth/me — self profile update. Only profile fields are writable;
@@ -253,6 +345,9 @@ async function changePassword(req, res) {
     }
     const bcryptRounds = process.env.NODE_ENV === 'production' ? 12 : 10;
     user.passwordHash = await bcrypt.hash(String(newPassword), bcryptRounds);
+    // Invalidate all sessions on password change
+    user.tokenVersion = (user.tokenVersion || 0) + 1;
+    user.refreshTokens = [];
     await user.save();
     return res.json({ success: true, message: 'Password changed successfully' });
   } catch (error) {
@@ -260,4 +355,4 @@ async function changePassword(req, res) {
   }
 }
 
-module.exports = { signup, login, me, logout, updateMe, changePassword };
+module.exports = { signup, login, me, logout, refresh, updateMe, changePassword };

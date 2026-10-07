@@ -57,6 +57,16 @@ const userSchema = new mongoose.Schema({
     enum: ['USER', 'ADMIN'],
     default: 'USER',
     index: true
+  },
+  tokenVersion: {
+    type: Number,
+    default: 0,
+    index: true
+  },
+  refreshTokens: {
+    type: [{ hash: { type: String }, createdAt: { type: Date, default: Date.now }, expiresAt: { type: Date } }],
+    default: [],
+    select: false
   }
 }, { timestamps: true });
 

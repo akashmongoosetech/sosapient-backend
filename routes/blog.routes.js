@@ -42,12 +42,12 @@ router.post('/:id/like', rateLimit({ windowMs: 60000, max: 20 }), likeBlog);
 router.get('/:slug/comments', getCommentsBySlug);
 router.post('/:id/comments', rateLimit({ windowMs: 60000, max: 15 }), commentAvatarUpload.single('avatar'), handleUploadError, addCommentById);
 
-// Comment edit/delete routes - specific routes first (ownership enforced via auth-adjacent userId + rate-limit)
-router.put('/:blogId/comments/:commentId', rateLimit({ windowMs: 60000, max: 15 }), editCommentById);
-router.delete('/:blogId/comments/:commentId', rateLimit({ windowMs: 60000, max: 15 }), deleteCommentById);
+// Comment edit/delete/vote/like - identity comes from JWT, never the body
+router.put('/:blogId/comments/:commentId', authenticateUser, rateLimit({ windowMs: 60000, max: 15 }), editCommentById);
+router.delete('/:blogId/comments/:commentId', authenticateUser, rateLimit({ windowMs: 60000, max: 15 }), deleteCommentById);
 
-router.post('/:blogId/comments/:commentId/vote', rateLimit({ windowMs: 60000, max: 30 }), voteOnComment);
-router.post('/:blogId/comments/:commentId/like', rateLimit({ windowMs: 60000, max: 30 }), likeComment);
+router.post('/:blogId/comments/:commentId/vote', authenticateUser, rateLimit({ windowMs: 60000, max: 30 }), voteOnComment);
+router.post('/:blogId/comments/:commentId/like', authenticateUser, rateLimit({ windowMs: 60000, max: 30 }), likeComment);
 
 // Admin routes (JWT + ADMIN role)
 router.get('/admin', authenticateUser, requireAdmin, getAllBlogsAdmin);

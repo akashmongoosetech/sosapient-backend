@@ -81,14 +81,16 @@ function normalizeStringArray(input) {
     .filter(v => v.length > 0);
 }
 
-// Configure multer for image uploads
+// Configure multer for image uploads (random hex names; ext allowlisted, never trusted as executable)
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, 'uploads/blog-images/');
   },
   filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, 'blog-' + uniqueSuffix + path.extname(file.originalname));
+    const crypto = require('crypto');
+    const ext = String(path.extname(file.originalname || '')).toLowerCase();
+    const safeExt = ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext) ? ext : '.bin';
+    cb(null, 'blog-' + Date.now() + '-' + crypto.randomBytes(8).toString('hex') + safeExt);
   }
 });
 
@@ -113,14 +115,16 @@ const upload = multer({
   }
 });
 
-// Configure multer for comment avatar uploads
+// Configure multer for comment avatar uploads (random hex names; ext allowlisted)
 const commentAvatarStorage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, 'uploads/comment-avatars/');
   },
   filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, 'avatar-' + uniqueSuffix + path.extname(file.originalname));
+    const crypto = require('crypto');
+    const ext = String(path.extname(file.originalname || '')).toLowerCase();
+    const safeExt = ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext) ? ext : '.bin';
+    cb(null, 'avatar-' + Date.now() + '-' + crypto.randomBytes(8).toString('hex') + safeExt);
   }
 });
 
@@ -318,33 +322,32 @@ const testLikeComment = async (req, res) => {
 const likeComment = async (req, res) => {
   try {
     const { blogId, commentId } = req.params;
-    const { userId } = req.body || {};
+    const userId = req.auth && req.auth.userId;
 
     console.log('=== LIKE COMMENT REQUEST ===');
     console.log('Blog ID:', blogId);
     console.log('Comment ID:', commentId);
-    console.log('User ID:', userId);
 
     // Validate required parameters with proper MongoDB ObjectId validation
     if (!blogId || !mongoose.Types.ObjectId.isValid(blogId)) {
       console.log('Invalid blog ID format');
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Invalid blog ID format' 
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid blog ID format'
       });
     }
     if (!commentId || !mongoose.Types.ObjectId.isValid(commentId)) {
       console.log('Invalid comment ID format');
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Invalid comment ID format' 
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid comment ID format'
       });
     }
-    if (!userId || typeof userId !== 'string' || userId.trim().length === 0) {
-      console.log('User ID is required');
-      return res.status(400).json({ 
-        success: false, 
-        message: 'User ID is required' 
+    if (!userId) {
+      console.log('Missing authenticated user');
+      return res.status(401).json({
+        success: false,
+        message: 'Unauthorized: authentication required'
       });
     }
 
@@ -500,13 +503,14 @@ const likeComment = async (req, res) => {
 const voteOnComment = async (req, res) => {
   try {
     const { blogId, commentId } = req.params;
-    const { action, voterId } = req.body || {};
+    const { action } = req.body || {};
+    const voterId = req.auth && req.auth.userId;
 
     if (!blogId || !blogId.match(/^[0-9a-fA-F]{24}$/) || !commentId || !commentId.match(/^[0-9a-fA-F]{24}$/)) {
       return res.status(400).json({ success: false, message: 'Invalid blog or comment ID' });
     }
-    if (!voterId || typeof voterId !== 'string' || voterId.trim().length === 0) {
-      return res.status(400).json({ success: false, message: 'Missing voterId' });
+    if (!voterId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized: authentication required' });
     }
 
     // Load current comment to determine membership and compute idempotent deltas
@@ -583,8 +587,8 @@ const voteOnComment = async (req, res) => {
     const updated = await Blog.findOneAndUpdate({ _id: blogId, 'comments._id': commentId }, update, { new: true, projection: { comments: { $elemMatch: { _id: commentId } } } });
     const c = updated.comments[0];
     return res.json({ success: true, data: { likeCount: c.likeCount || 0, dislikeCount: c.dislikeCount || 0 } });
-  } catch (error) {
-    return res.status(500).json({ success: false, message: 'Error updating comment vote', error: error.message });
+    } catch (error) {
+    return res.status(500).json({ success: false, message: 'Error updating comment vote', error: errDetail(error) });
   }
 };
 
@@ -1124,13 +1128,17 @@ const getCommentsBySlug = async (req, res) => {
 
     res.json({ success: true, data: comments });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error fetching comments', error: error.message });
+    res.status(500).json({ success: false, message: 'Error fetching comments', error: errDetail(error) });
   }
 };
 
 // Add a new comment by blog ID
 const addCommentById = async (req, res) => {
   try {
+    const { isHoneypotFilled } = require('../utils/honeypot');
+    if (isHoneypotFilled(req.body)) {
+      return res.status(201).json({ success: true, message: 'Comment added' });
+    }
     const { id } = req.params;
     const { name, email, comment } = req.body || {};
 
@@ -1145,13 +1153,13 @@ const addCommentById = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid email address' });
     }
 
-    // Build new comment
+    // Build new comment (ownership derived server-side only; never trust client userId)
     const newComment = {
       _id: new mongoose.Types.ObjectId(),
-      name: String(name).trim(),
-      email: String(email).trim().toLowerCase(),
-      comment: String(comment).trim(),
-      userId: req.body.userId || null, // Add userId for ownership tracking
+      name: String(name).trim().slice(0, 100),
+      email: String(email).trim().toLowerCase().slice(0, 160),
+      comment: String(comment).trim().slice(0, 5000),
+      userId: null, // public comments are anonymous; ownership assigned only via authenticated edit flow
       approved: true,
       createdAt: new Date()
     };
@@ -1173,36 +1181,30 @@ const addCommentById = async (req, res) => {
 
     res.status(201).json({ success: true, message: 'Comment added', data: newComment });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error adding comment', error: error.message });
+    res.status(500).json({ success: false, message: 'Error adding comment', error: errDetail(error) });
   }
 };
 
 // Edit a comment by comment ID
 const editCommentById = async (req, res) => {
   try {
-    console.log('=== EDIT COMMENT REQUEST ===');
-    console.log('Params:', req.params);
-    console.log('Body:', req.body);
-    
     const { blogId, commentId } = req.params;
-    const { comment, userId } = req.body;
+    const { comment } = req.body;
+    const userId = req.auth && req.auth.userId;
+    const isAdmin = req.user && req.user.role === 'ADMIN';
 
     // Validate required fields
     if (!blogId || !mongoose.Types.ObjectId.isValid(blogId)) {
-      console.log('Invalid blog ID:', blogId);
       return res.status(400).json({ success: false, message: 'Invalid blog ID format' });
     }
     if (!commentId || !mongoose.Types.ObjectId.isValid(commentId)) {
-      console.log('Invalid comment ID:', commentId);
       return res.status(400).json({ success: false, message: 'Invalid comment ID format' });
     }
     if (!comment || !comment.trim()) {
-      console.log('Empty comment content');
       return res.status(400).json({ success: false, message: 'Comment content is required' });
     }
     if (!userId) {
-      console.log('Missing user ID');
-      return res.status(400).json({ success: false, message: 'User ID is required' });
+      return res.status(401).json({ success: false, message: 'Unauthorized: authentication required' });
     }
 
     // Validate comment length
@@ -1219,7 +1221,6 @@ const editCommentById = async (req, res) => {
     });
     
     if (!blogWithComment) {
-      console.log('Blog or comment not found');
       return res.status(404).json({ 
         success: false, 
         message: 'Comment not found' 
@@ -1229,29 +1230,21 @@ const editCommentById = async (req, res) => {
     // Find the specific comment
     const targetComment = blogWithComment.comments.find(c => c._id.toString() === commentId);
     if (!targetComment) {
-      console.log('Comment not found in blog');
       return res.status(404).json({ 
         success: false, 
         message: 'Comment not found' 
       });
     }
     
-    console.log('Found comment:', {
-      _id: targetComment._id,
-      userId: targetComment.userId,
-      requestUserId: userId
-    });
-    
-    // Check ownership - allow editing if userId matches OR if comment has no userId (legacy comment)
-    if (targetComment.userId && targetComment.userId !== userId) {
-      console.log('Permission denied - not comment owner');
+    // Ownership: owner or ADMIN only. Legacy comments without userId are ADMIN-only.
+    const ownerId = targetComment.userId ? String(targetComment.userId) : null;
+    if (!isAdmin && (!ownerId || ownerId !== String(userId))) {
       return res.status(403).json({ 
         success: false, 
         message: 'You do not have permission to edit this comment' 
       });
     }
 
-    console.log('Updating comment...');
     // Update the comment - use the found blog for the update
     const updatedBlog = await Blog.findOneAndUpdate(
       {
@@ -1268,21 +1261,18 @@ const editCommentById = async (req, res) => {
     );
 
     if (!updatedBlog) {
-      console.log('Failed to update comment');
       return res.status(404).json({ success: false, message: 'Failed to update comment' });
     }
 
     // Find the updated comment
     const updatedComment = updatedBlog.comments.find(c => c._id.toString() === commentId);
     
-    console.log('Comment updated successfully');
     res.json({ 
       success: true, 
       message: 'Comment updated successfully', 
       data: updatedComment 
     });
   } catch (error) {
-    console.error('Error editing comment:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Error editing comment', 
@@ -1294,28 +1284,21 @@ const editCommentById = async (req, res) => {
 // Delete a comment by comment ID
 const deleteCommentById = async (req, res) => {
   try {
-    console.log('=== DELETE COMMENT REQUEST ===');
-    console.log('Params:', req.params);
-    console.log('Body:', req.body);
-    
     const { blogId, commentId } = req.params;
-    const { userId } = req.body;
+    const userId = req.auth && req.auth.userId;
+    const isAdmin = req.user && req.user.role === 'ADMIN';
 
     // Validate required fields
     if (!blogId || !mongoose.Types.ObjectId.isValid(blogId)) {
-      console.log('Invalid blog ID:', blogId);
       return res.status(400).json({ success: false, message: 'Invalid blog ID format' });
     }
     if (!commentId || !mongoose.Types.ObjectId.isValid(commentId)) {
-      console.log('Invalid comment ID:', commentId);
       return res.status(400).json({ success: false, message: 'Invalid comment ID format' });
     }
     if (!userId) {
-      console.log('Missing user ID');
-      return res.status(400).json({ success: false, message: 'User ID is required' });
+      return res.status(401).json({ success: false, message: 'Unauthorized: authentication required' });
     }
 
-    console.log('Looking for blog with comment...');
     // Find the blog and verify comment ownership
     // First, let's check if the comment exists at all
     const blogWithComment = await Blog.findOne({
@@ -1324,7 +1307,6 @@ const deleteCommentById = async (req, res) => {
     });
     
     if (!blogWithComment) {
-      console.log('Blog or comment not found');
       return res.status(404).json({ 
         success: false, 
         message: 'Comment not found' 
@@ -1334,29 +1316,21 @@ const deleteCommentById = async (req, res) => {
     // Find the specific comment
     const targetComment = blogWithComment.comments.find(c => c._id.toString() === commentId);
     if (!targetComment) {
-      console.log('Comment not found in blog');
       return res.status(404).json({ 
         success: false, 
         message: 'Comment not found' 
       });
     }
     
-    console.log('Found comment:', {
-      _id: targetComment._id,
-      userId: targetComment.userId,
-      requestUserId: userId
-    });
-    
-    // Check ownership - allow deleting if userId matches OR if comment has no userId (legacy comment)
-    if (targetComment.userId && targetComment.userId !== userId) {
-      console.log('Permission denied - not comment owner');
+    // Ownership: owner or ADMIN only. Legacy comments without userId are ADMIN-only.
+    const ownerId = targetComment.userId ? String(targetComment.userId) : null;
+    if (!isAdmin && (!ownerId || ownerId !== String(userId))) {
       return res.status(403).json({ 
         success: false, 
         message: 'You do not have permission to delete this comment' 
       });
     }
 
-    console.log('Deleting comment...');
     // Remove the comment - simplified query without userId constraint for legacy comments
     const updatedBlog = await Blog.findOneAndUpdate(
       {
@@ -1371,17 +1345,14 @@ const deleteCommentById = async (req, res) => {
     );
 
     if (!updatedBlog) {
-      console.log('Failed to delete comment');
       return res.status(404).json({ success: false, message: 'Failed to delete comment' });
     }
 
-    console.log('Comment deleted successfully');
     res.json({ 
       success: true, 
       message: 'Comment deleted successfully'
     });
   } catch (error) {
-    console.error('Error deleting comment:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Error deleting comment', 
@@ -1411,7 +1382,8 @@ const getCategories = async (req, res) => {
 // Get featured blogs
 const getFeaturedBlogs = async (req, res) => {
   try {
-    const limit = parseInt(req.query.limit) || 3;
+    const raw = parseInt(req.query.limit, 10);
+    const limit = Number.isFinite(raw) ? Math.min(Math.max(raw, 1), 20) : 3;
     
     const blogs = await Blog.find({ 
       status: 'published', 

@@ -28,9 +28,17 @@ async function authenticateUser(req, res, next) {
     if (!userId) {
       return res.status(401).json({ success: false, message: 'Unauthorized: invalid token' });
     }
+    // Refresh tokens must never access resources
+    if (payload.type === 'refresh') {
+      return res.status(401).json({ success: false, message: 'Unauthorized: invalid token type' });
+    }
     const user = await User.findById(userId);
     if (!user) {
       return res.status(401).json({ success: false, message: 'Unauthorized: user not found' });
+    }
+    // Token version check: bumped on password change / reuse detection. Legacy tokens without tv pass.
+    if (payload.tv !== undefined && (user.tokenVersion || 0) !== payload.tv) {
+      return res.status(401).json({ success: false, message: 'Unauthorized: session revoked' });
     }
     req.user = user;
     req.auth = { userId: String(user._id), role: user.role };

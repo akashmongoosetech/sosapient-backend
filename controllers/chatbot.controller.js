@@ -1,5 +1,6 @@
 const Contact = require('../models/contact.model');
 const { sendContactEmail } = require('../utils/emailService');
+const { isHoneypotFilled } = require('../utils/honeypot');
 const chatbot = require('../services/chatbot.service');
 const rag = require('../services/rag.service');
 
@@ -91,6 +92,12 @@ async function message(req, res) {
 // POST /api/chatbot/contact — idempotent lead capture into Contact (source AI_CHATBOT)
 async function submitContact(req, res) {
   try {
+    if (isHoneypotFilled(req.body)) {
+      return res.status(201).json({
+        success: true,
+        message: "Thanks! I've received your details. We'll use this information to follow up regarding your project."
+      });
+    }
     const {
       conversationId = null,
       name, email, phone, company = '',

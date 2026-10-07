@@ -1,5 +1,6 @@
 const Career = require('../models/career.model');
 const { sendCareerEmail } = require('../utils/emailService');
+const { isHoneypotFilled } = require('../utils/honeypot');
 
 function errMsg(error, fallback) {
   return process.env.NODE_ENV === 'production' ? fallback : (error.message || fallback);
@@ -20,6 +21,9 @@ function stripResume(doc) {
 // Create new career application
 const createCareer = async (req, res) => {
   try {
+    if (isHoneypotFilled(req.body)) {
+      return res.status(201).json({ success: true });
+    }
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'Resume file is required' });
     }

@@ -1,14 +1,18 @@
 const Contact = require('../models/contact.model');
 const { sendContactEmail } = require('../utils/emailService');
+const { isHoneypotFilled } = require('../utils/honeypot');
 
 function errDetail(error) {
   return process.env.NODE_ENV === 'production' ? undefined : error.message;
 }
 const CONTACT_FIELDS = ['name', 'email', 'company', 'phone', 'subject', 'message', 'budget', 'timeline'];
+const CONTACT_MAX = { name: 100, email: 160, company: 160, phone: 40, subject: 200, message: 5000 };
 function pickContact(body = {}) {
   const out = {};
   for (const k of CONTACT_FIELDS) {
-    if (body[k] !== undefined && body[k] !== '') out[k] = body[k];
+    if (body[k] !== undefined && body[k] !== '') {
+      out[k] = typeof body[k] === 'string' && CONTACT_MAX[k] ? body[k].slice(0, CONTACT_MAX[k]) : body[k];
+    }
   }
   return out;
 }
@@ -16,6 +20,9 @@ function pickContact(body = {}) {
 // Create new contact submission
 exports.createContact = async (req, res) => {
   try {
+    if (isHoneypotFilled(req.body)) {
+      return res.status(201).json({ success: true, message: 'Contact form submitted successfully' });
+    }
     const contact = new Contact(pickContact(req.body));
     await contact.save();
 

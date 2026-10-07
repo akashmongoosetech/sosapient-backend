@@ -4,14 +4,26 @@ const nodemailer = require("nodemailer");
 const createTransporter = () => {
   return nodemailer.createTransport({
     host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-    port: parseInt(process.env.EMAIL_PORT) || 587,
+    port: parseInt(process.env.EMAIL_PORT, 10) || 587,
     secure: false, // true for 465, false for other ports
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS,
     },
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
   });
 };
+
+function withTimeout(promise, ms = 15000, label = 'Email send timed out') {
+  let t;
+  const timeout = new Promise((_, reject) => {
+    t = setTimeout(() => reject(new Error(label)), ms);
+    if (t.unref) t.unref();
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(t));
+}
 
 const transporter = createTransporter();
 
@@ -52,7 +64,7 @@ const sendContactEmail = async (contactData) => {
   try {
     // Create fresh transporter for contact emails to avoid auth issues
     const contactTransporter = createTransporter();
-    await contactTransporter.sendMail(mailOptions);
+    await withTimeout(contactTransporter.sendMail(mailOptions), 15000, 'Contact email timed out');
     return true;
   } catch (error) {
     console.error("Error sending contact email");
@@ -68,12 +80,12 @@ const getApplicantEmailTemplate = (career) => {
       
       <!-- Header with Logo -->
       <div style="background-color: #007BFF; padding: 20px; text-align: center;">
-        <img src="https://ik.imagekit.io/sentyaztie/Dicon.png?updatedAt=1750067621393" alt="SosaPient Logo" style="max-width: 150px;"/>
+        <img src="https://ik.imagekit.io/sentyaztie/Dicon.png?updatedAt=1750067621393" alt="SoSapient Logo" style="max-width: 150px;"/>
       </div>
 
       <!-- Body -->
       <div style="padding: 30px;">
-        <h2 style="color: #333;">Thank You for Applying to <span style="color: #007BFF;">SosaPient</span>!</h2>
+        <h2 style="color: #333;">Thank You for Applying to <span style="color: #007BFF;">SoSapient</span>!</h2>
         <p style="font-size: 16px; color: #555;">Dear <strong>${escapeHtml(
           career.name
         )}</strong>,</p>
@@ -93,9 +105,9 @@ const getApplicantEmailTemplate = (career) => {
   <strong>Best regards,</strong><br>
   Ritu Chouhan<br>
   HR Head - Operations<br>
-  SosaPient
+  SoSapient
 </p>
-        <img src="https://ik.imagekit.io/sentyaztie/Dlogo.png?updatedAt=1749928182723" alt="SosaPient Logo" style="max-width: 150px;"/>
+        <img src="https://ik.imagekit.io/sentyaztie/Dlogo.png?updatedAt=1749928182723" alt="SoSapient Logo" style="max-width: 150px;"/>
       </div>
 
       <!-- Footer -->
@@ -115,7 +127,7 @@ const getApplicantEmailTemplate = (career) => {
             <img src="https://cdn-icons-png.flaticon.com/24/733/733558.png" alt="Instagram" style="vertical-align: middle;" />
           </a>
         </div>
-        <p style="color: #999; font-size: 12px;">© ${new Date().getFullYear()} SosaPient. All rights reserved.<br/>
+        <p style="color: #999; font-size: 12px;">© ${new Date().getFullYear()} SoSapient. All rights reserved.<br/>
         <a href="https://sosapient.in" style="color: #007BFF; text-decoration: none;">Visit our Website</a> |
         <a href="mailto:hr.sosapient@gmail.com" style="color: #007BFF; text-decoration: none;">hr.sosapient@gmail.com</a></p>
       </div>
@@ -144,21 +156,21 @@ const getAdminEmailTemplate = (career) => {
 // Send emails to both applicant and admin
 const sendCareerEmail = async (career) => {
   try {
-    // Send email to applicant
-    await transporter.sendMail({
-      from: `"SosaPient" <${process.env.EMAIL_USER}>`,
+    // Sequential with per-mail timeout so an SMTP outage cannot hang the request
+    await withTimeout(transporter.sendMail({
+      from: `"SoSapient" <${process.env.EMAIL_USER}>`,
       to: career.email,
-      subject: "Thank you for your job application - SosaPient",
+      subject: "Thank you for your job application - SoSapient",
       html: getApplicantEmailTemplate(career),
-    });
+    }), 15000, 'Applicant email timed out');
 
     // Send email to admin
-    await transporter.sendMail({
-      from: `"SosaPient" <${process.env.EMAIL_USER}>`,
+    await withTimeout(transporter.sendMail({
+      from: `"SoSapient" <${process.env.EMAIL_USER}>`,
       to: process.env.ADMIN_EMAIL || process.env.EMAIL_USER,
       subject: "New Job Application Received",
       html: getAdminEmailTemplate(career),
-    });
+    }), 15000, 'Admin email timed out');
 
     return true;
   } catch (error) {

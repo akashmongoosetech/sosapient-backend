@@ -7,28 +7,54 @@ const subscriberRoutes = require('./routes/subscribers');
 
 const app = express();
 
+// Trust proxy (Render/Vercel/Netlify) so req.ip + rate-limit work behind proxies
+app.set('trust proxy', 1);
+
 // Security headers (lightweight helmet-equivalent, no new dependency)
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-  // uploads contain only images; never execute as scripts
-  res.setHeader('X-Content-Security-Policy', "default-src 'none'; img-src 'self'; style-src 'self'");
+  // Standard CSP for a JSON API + static uploads: no framing, no execution
+  res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self' data:; style-src 'self'; frame-ancestors 'none'");
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+  res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+  // HSTS only in production behind HTTPS (never send on http://localhost)
+  if (process.env.NODE_ENV === 'production') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  }
   next();
 });
 
+// Fail-closed env checks at boot (never log values)
+if (!process.env.MONGODB_URI) {
+  console.error('FATAL: MONGODB_URI is not set');
+  process.exit(1);
+}
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'your-jwt-secret-key-here' || process.env.JWT_SECRET.length < 32) {
+  console.error('FATAL: JWT_SECRET is missing, placeholder, or too short (>=32 chars required)');
+  process.exit(1);
+}
+
 // CORS configuration (env-driven allowlist with scheme fix)
-const defaultOrigins = [
+// In production localhost/preview/staging origins are dropped unless explicitly in CORS_ORIGINS.
+const devOrigins = [
   'http://localhost:5173', // Development
   'http://localhost:3000', // Alternative development port
-  'https://sosapient-test.netlify.app', // Production
+];
+const prodOrigins = [
+  'https://sosapient-test.netlify.app',
   'https://sosapient.in',
   'https://www.sosapient.in',
-  'https://staging.sosapient.com', // Staging
   'https://sosapient-backend.onrender.com', // Backend domain (for self-requests)
+];
+const previewOrigins = [
+  'https://staging.sosapient.com', // Staging
   'https://sosapient-backend-mdhx-cy6ftta6r-akash-raikwars-projects.vercel.app'
 ];
+const isProd = process.env.NODE_ENV === 'production';
+const defaultOrigins = isProd ? prodOrigins : [...devOrigins, ...prodOrigins, ...previewOrigins];
 // Merge defaults + env allowlist and normalize (strip trailing slashes:
 // the Origin header never has a path, so 'http://localhost:5173/' would never match).
 const envOrigins = (process.env.CORS_ORIGINS || '')
@@ -72,7 +98,7 @@ try {
 } catch (e) {
   console.warn('Warning: could not ensure uploads directories exist:', e.message);
 }
-app.use('/uploads', express.static(uploadsDir));
+app.use('/uploads', express.static(uploadsDir, { maxAge: '7d', etag: true, lastModified: true }));
 
 // Import routes
 const authRoutes = require('./routes/auth.routes');
@@ -85,13 +111,20 @@ const jobRoutes = require('./routes/job.routes');
 const caseStudyRoutes = require('./routes/caseStudy.routes');
 const certificateRoutes = require('./routes/certificate.routes');
 
-// Health check endpoint
+// Health check endpoint (DB-aware: reports degraded when Mongo is down)
 app.get('/health', (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: 'Server is running',
+  const dbState = mongoose.connection.readyState; // 1 = connected
+  const ok = dbState === 1;
+  res.status(ok ? 200 : 503).json({
+    success: ok,
+    message: ok ? 'Server is running' : 'Server degraded: database not connected',
     timestamp: new Date().toISOString()
   });
+});
+
+app.get('/ready', (req, res) => {
+  const ok = mongoose.connection.readyState === 1;
+  res.status(ok ? 200 : 503).json({ success: ok, db: mongoose.connection.readyState });
 });
 
 // Dynamic SEO: sitemap (published posts) + robots (blog crawlable, admin excluded)
@@ -145,11 +178,29 @@ mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000 })
     }
     // Start server
     const PORT = process.env.PORT || 5000;
-    app.listen(PORT, () => {
+    server = app.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}`);
     });
   })
   .catch((error) => {
     console.error('MongoDB connection error:', error.message || error);
     process.exit(1);
-  }); 
+  });
+
+// Graceful shutdown (Render/Heroku SIGTERM): drain HTTP + close Mongo
+let server;
+const shutdown = async (signal) => {
+  try {
+    console.log(`${signal} received: closing server...`);
+    if (server && server.close) {
+      await new Promise((resolve) => server.close(resolve));
+    }
+    await mongoose.disconnect();
+    process.exit(0);
+  } catch (e) {
+    console.error('Shutdown error:', e.message || e);
+    process.exit(1);
+  }
+};
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT')); 

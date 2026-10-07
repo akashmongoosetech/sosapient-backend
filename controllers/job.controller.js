@@ -15,7 +15,7 @@ function errMessage(error, fallback) {
   return process.env.NODE_ENV === 'production' ? fallback : (error.message || fallback);
 }
 
-const JOB_FIELDS = ['title', 'department', 'location', 'type', 'experience', 'description', 'salary', 'requirements', 'responsibilities', 'benefits', 'status'];
+const JOB_FIELDS = ['title', 'department', 'location', 'type', 'experience', 'description', 'salary', 'requirements', 'responsibilities', 'benefits', 'status', 'slug'];
 function pickJob(body = {}) {
   const out = {};
   for (const k of JOB_FIELDS) {
@@ -49,10 +49,17 @@ const getAllJobs = async (req, res) => {
   }
 };
 
-// Get single job
+// Get single job (supports Mongo _id for backward compat + slug for SEO URLs)
 const getJobById = async (req, res) => {
   try {
-    const job = await Job.findById(req.params.id);
+    const key = String(req.params.id || '').trim();
+    let job = null;
+    if (/^[0-9a-fA-F]{24}$/.test(key)) {
+      job = await Job.findById(key);
+    }
+    if (!job) {
+      job = await Job.findOne({ slug: key.toLowerCase() });
+    }
     if (!job) return res.status(404).json({ success: false, message: 'Job not found' });
     res.json({ success: true, data: job });
   } catch (error) {

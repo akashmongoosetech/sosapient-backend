@@ -32,15 +32,18 @@ const careerSchema = new mongoose.Schema({
   },
   currentCompany: {
     type: String,
-    required: [true, 'Current company is required']
+    trim: true,
+    default: ''
   },
   expectedSalary: {
     type: String,
-    required: [true, 'Expected salary is required']
+    trim: true,
+    default: ''
   },
   noticePeriod: {
     type: String,
-    required: [true, 'Notice period is required']
+    trim: true,
+    default: ''
   },
   status: {
     type: String,
@@ -50,5 +53,8 @@ const careerSchema = new mongoose.Schema({
 }, {
   timestamps: true
 });
+
+careerSchema.index({ status: 1, createdAt: -1 });
+careerSchema.index({ email: 1 });
 
 module.exports = mongoose.model('Career', careerSchema); 

@@ -3,12 +3,16 @@ const router = express.Router();
 const Subscriber = require('../models/Subscriber');
 const { authenticateUser, requireAdmin } = require('../middleware/auth');
 const { rateLimit } = require('../middleware/rateLimit');
+const { isHoneypotFilled } = require('../utils/honeypot');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Subscribe to newsletter (public, rate-limited)
 router.post('/subscribe', rateLimit({ windowMs: 60000, max: 10 }), async (req, res) => {
   try {
+    if (isHoneypotFilled(req.body)) {
+      return res.status(201).json({ success: true, message: 'Successfully subscribed to newsletter' });
+    }
     const { email } = req.body;
 
     if (!email || !EMAIL_RE.test(String(email).slice(0, 160))) {

@@ -1,16 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const { rateLimit } = require('../middleware/rateLimit');
+const { fetchWithTimeout } = require('../utils/http');
 
-async function fetchWithTimeout(url, options = {}, ms = 12000) {
-  const controller = new AbortController();
-  const t = setTimeout(() => controller.abort(), ms);
-  try {
-    return await fetch(url, { ...options, signal: controller.signal });
-  } finally {
-    clearTimeout(t);
-  }
-}
+// Legacy endpoint: kept for backward compat. New assistant features use /api/chatbot (Gemini+RAG).
 
 // CopilotKit compatible endpoint
 router.post('/', rateLimit({ windowMs: 60000, max: 15 }), async (req, res) => {
