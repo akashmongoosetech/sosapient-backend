@@ -47,7 +47,7 @@ const prodOrigins = [
   'https://sosapient-test.netlify.app',
   'https://sosapient.in',
   'https://www.sosapient.in',
-  'https://sosapient-backend.onrender.com', // Backend domain (for self-requests)
+  'https://sosapient-backend-49je.onrender.com', // Backend domain (for self-requests)
 ];
 const previewOrigins = [
   'https://staging.sosapient.com', // Staging
