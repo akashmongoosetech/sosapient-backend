@@ -26,7 +26,7 @@ const ragDocumentSchema = new mongoose.Schema({
   sourceType: {
     type: String,
     required: true,
-    enum: ['blog', 'case-study', 'service', 'business-info']
+    enum: ['blog', 'case-study', 'service', 'business-info', 'industry', 'faq', 'business', 'job']
   },
   metadata: {
     title: { type: String, trim: true, maxlength: [200], default: '' },

@@ -120,13 +120,27 @@ async function indexBusinessInfo() {
     sections: [
       {
         label: 'business contact',
-        text: 'SoSapient is a software company in Ujjain, Madhya Pradesh, India, serving clients worldwide. Contact via the contact page at /contact or email hr.sosapient@gmail.com. Services: web and mobile development, AI solutions and automation, CRM and ERP software, digital marketing and social media promotion.'
+        text: 'SoSapient is a software company in Ujjain, Madhya Pradesh, India, serving clients worldwide. Contact via the contact page at /contact or email info.sosapient@gmail.com, support +91-9685533878.'
       }
     ],
     published: true
   });
   console.log(`business info indexed: ${r.indexed} chunks`);
   return r.indexed;
+}
+
+// Full website knowledge (services FULL, industries, page FAQs, business
+// facts) straight from the frontend source files — no duplication.
+async function indexWebsiteKnowledge() {
+  const exporter = require('./export-website-knowledge');
+  const { docs } = await exporter.collect();
+  let n = 0;
+  for (const d of docs) {
+    const r = await rag.indexDocument(d);
+    n += r.indexed || 0;
+  }
+  console.log(`website knowledge indexed: ${docs.length} docs, ${n} chunks`);
+  return n;
 }
 
 async function rebuild({ skipClear = false } = {}) {
@@ -138,6 +152,7 @@ async function rebuild({ skipClear = false } = {}) {
   await indexBlogs();
   await indexCaseStudies();
   await indexBusinessInfo();
+  await indexWebsiteKnowledge();
   const total = await RagDocument.countDocuments({ published: true });
   console.log(`total published chunks: ${total}`);
   return total;

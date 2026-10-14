@@ -115,7 +115,8 @@ async function removeDocument(source, sourceId) {
 }
 
 // Keyword prefilter narrows candidates; cosine ranks when vectors exist.
-async function searchRelevant(query, { topK = TOP_K, sourceTypes = null } = {}) {
+// minScore drops irrelevant fallback candidates (quality gate).
+async function searchRelevant(query, { topK = TOP_K, sourceTypes = null, minScore = 0 } = {}) {
   const filter = { published: true };
   if (Array.isArray(sourceTypes) && sourceTypes.length > 0) {
     filter.sourceType = { $in: sourceTypes };
@@ -167,9 +168,14 @@ async function searchRelevant(query, { topK = TOP_K, sourceTypes = null } = {}) 
         return { ...c, _score: sim >= 0 ? sim + textHits * 0.05 : textHits * 0.05 };
       })
       .sort((a, b) => b._score - a._score);
+  } else {
+    candidates = candidates.map((c, i) => ({ ...c, _score: candidates.length - i }));
   }
 
-  return candidates.slice(0, topK);
+  const gated = minScore > 0
+    ? candidates.filter((c) => (c._score ?? 0) >= minScore)
+    : candidates;
+  return gated.slice(0, topK);
 }
 
 function buildContext(chunks) {

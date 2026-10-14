@@ -14,7 +14,8 @@ function normalizeQuery(message) {
 // Lightweight intent detection (no extra LLM call).
 function detectIntent(message) {
   const t = String(message || '').toLowerCase();
-  const has = (...words) => words.some((w) => t.includes(w));
+  // NOTE: callers pass a single array; flatten so includes() gets strings.
+  const has = (...words) => words.flat().some((w) => typeof w === 'string' && t.includes(w));
   if (/^(hi|hey|hello|namaste|good (morning|afternoon|evening))\b/.test(t) && t.length < 30) {
     return { intent: 'greeting', confidence: 'high' };
   }
@@ -48,10 +49,13 @@ function detectIntent(message) {
 // ---- Allowlisted structured tools (validated queries only) ----
 
 async function getPublishedServices(limit = 17) {
-  const docs = await rag.searchRelevant('', { topK: 60 });
+  const RagDocument = require('../models/RagDocument');
+  const docs = await RagDocument.find({ published: true, sourceType: 'service' })
+    .select('sourceId metadata')
+    .lean();
   const seen = new Map();
   for (const d of docs) {
-    if (d.sourceType !== 'service' || seen.has(d.sourceId)) continue;
+    if (seen.has(d.sourceId)) continue;
     seen.set(d.sourceId, {
       title: d.metadata?.title || d.sourceId,
       slug: d.sourceId,
@@ -60,7 +64,37 @@ async function getPublishedServices(limit = 17) {
     });
     if (seen.size >= limit) break;
   }
+  // Fallback to the static snapshot list if the index is empty.
+  if (seen.size === 0) {
+    try {
+      const snapshot = require('../data/services.snapshot.json');
+      for (const s of snapshot.services || []) {
+        seen.set(s.slug, { title: s.name, slug: s.slug, url: `/services/${s.slug}`, category: s.category || '' });
+        if (seen.size >= limit) break;
+      }
+    } catch (e) {
+      // snapshot missing — return empty, RAG fallback handles it
+    }
+  }
   return [...seen.values()];
+}
+
+async function getOpenJobs(limit = 5) {
+  const Job = require('../models/job.model');
+  const items = await Job.find({ status: 'open' })
+    .select('title slug department location type experience')
+    .sort({ createdAt: -1 })
+    .limit(Math.min(Math.max(limit, 1), 10))
+    .lean();
+  return items.map((j) => ({
+    title: j.title,
+    slug: j.slug,
+    url: `/careers/${j.slug || j._id}`,
+    department: j.department,
+    location: j.location,
+    type: j.type,
+    experience: j.experience
+  }));
 }
 
 async function getPublishedCaseStudies({ category = null, limit = 5 } = {}) {
@@ -102,7 +136,11 @@ function getBusinessContactInformation() {
   return {
     website: SITE_URL,
     contactPage: `${SITE_URL}/contact`,
-    email: 'hr.sosapient@gmail.com'
+    email: 'info.sosapient@gmail.com',
+    supportPhone: '+91-9685533878',
+    hrPhone: '+91-8815596247',
+    address: 'Anand Nagar, Vasant Vihar, Ujjain (M.P.) 456010, India',
+    hours: 'Mon–Fri 10AM–8PM IST'
   };
 }
 
@@ -190,6 +228,7 @@ module.exports = {
   normalizeQuery: (m) => normalizeQuery(m),
   detectIntent,
   getPublishedServices,
+  getOpenJobs,
   getPublishedCaseStudies,
   getPublishedBlogPosts,
   getBusinessContactInformation,

@@ -1,0 +1,44 @@
+{
+  "name": "SoSapient",
+  "tagline": "Software company and technology partner crafting custom websites, MERN stack apps, AI automation and CRM/ERP solutions",
+  "base": "Anand Nagar, Vasant Vihar, Ujjain (M.P.) 456010, India",
+  "area": "Ujjain, Madhya Pradesh, India — collaborating worldwide",
+  "email": "info.sosapient@gmail.com",
+  "supportPhone": "+91-9685533878",
+  "hrPhone": "+91-8815596247",
+  "hours": "Mon–Fri 10AM–8PM IST",
+  "responseTime": "within 24 hours",
+  "founded": "2022",
+  "stats": {
+    "projects": "50+ Projects Delivered",
+    "clients": "20+ Happy Clients",
+    "satisfaction": "98% Client Satisfaction",
+    "team": "25+ Team Members"
+  },
+  "social": {
+    "facebook": "https://www.facebook.com/profile.php?id=61553017931533",
+    "x": "https://x.com/SoSapient_tech",
+    "linkedin": "https://www.linkedin.com/company/100043699/",
+    "instagram": "https://www.instagram.com/sosapient/"
+  },
+  "process": [
+    "Discovery & Planning",
+    "Design & Prototyping",
+    "Development & Testing",
+    "Launch & Support"
+  ],
+  "routes": {
+    "home": "/",
+    "about": "/about",
+    "services": "/services",
+    "industries": "/industries",
+    "blog": "/blog",
+    "caseStudies": "/case-studies",
+    "careers": "/careers",
+    "contact": "/contact",
+    "portfolio": "/portfolio",
+    "privacy": "/privacy",
+    "terms": "/terms",
+    "cookies": "/cookies"
+  }
+}

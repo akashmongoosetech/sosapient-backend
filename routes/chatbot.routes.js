@@ -1,12 +1,17 @@
 const express = require('express');
 const router = express.Router();
-const { message, submitContact } = require('../controllers/chatbot.controller');
+const { message, submitContact, getStats } = require('../controllers/chatbot.controller');
 const { authenticateUser, requireAdmin } = require('../middleware/auth');
 const { rateLimit } = require('../middleware/rateLimit');
 
 // Public conversational endpoints (strict validation + rate limits inside handlers)
 router.post('/message', rateLimit({ windowMs: 60000, max: 15 }), message);
 router.post('/contact', rateLimit({ windowMs: 60000, max: 5 }), submitContact);
+
+// Admin observability: intent/source/fallback/latency counters (in-memory)
+router.get('/stats', authenticateUser, requireAdmin, (req, res) => {
+  return res.json({ success: true, data: getStats() });
+});
 
 // Admin-only full reindex of public RAG knowledge (runs in background)
 let reindexRunning = false;

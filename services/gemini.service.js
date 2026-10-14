@@ -57,7 +57,7 @@ function isConfigured() {
 
 // Generate a grounded chat reply. Retrieved context is passed as DATA,
 // never as instructions (see system prompt delimiters in chatbot.service.js).
-async function chat(messages) {
+async function chat(messages, { temperature = 0.4, maxTokens = 600 } = {}) {
   const res = await fetchWithRetry(
     `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
     {
@@ -72,8 +72,8 @@ async function chat(messages) {
           parts: [{ text: String(m.text || '').slice(0, 6000) }]
         })),
         generationConfig: {
-          temperature: 0.4,
-          maxOutputTokens: 600
+          temperature,
+          maxOutputTokens: maxTokens
         }
       })
     }
