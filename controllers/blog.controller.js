@@ -170,13 +170,16 @@ const getAllBlogs = async (req, res) => {
       filter.$text = { $search: String(search).slice(0, 200) };
     }
 
-    const blogs = await Blog.find(filter)
-      .sort({ publishedAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .lean();
-
-    const total = await Blog.countDocuments(filter);
+    const [blogs, total] = await Promise.all([
+      Blog.find(filter)
+        .sort({ publishedAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        // Listing cards render excerpt/meta only — never ship full content/sections/comments.
+        .select('title slug excerpt image imageAlt author category tags readTime status featured publishedAt createdAt views likes')
+        .lean(),
+      Blog.countDocuments(filter)
+    ]);
 
     res.json({
       success: true,
@@ -230,13 +233,16 @@ const getAllBlogsAdmin = async (req, res) => {
       filter.$text = { $search: String(search).slice(0, 200) };
     }
 
-    const blogs = await Blog.find(filter)
-      .sort({ createdAt: -1 }) // Sort by creation date for admin
-      .skip(skip)
-      .limit(limit)
-      .lean();
-
-    const total = await Blog.countDocuments(filter);
+    const [blogs, total] = await Promise.all([
+      Blog.find(filter)
+        .sort({ createdAt: -1 }) // Sort by creation date for admin
+        .skip(skip)
+        .limit(limit)
+        // Admin table shows summary columns; full doc loads on edit via GET /admin/:id.
+        .select('title slug excerpt image author category tags status featured readTime publishedAt createdAt views likes')
+        .lean(),
+      Blog.countDocuments(filter)
+    ]);
 
     res.json({
       success: true,
@@ -258,93 +264,26 @@ const getAllBlogsAdmin = async (req, res) => {
   }
 };
 
-// Test endpoint to verify comment like functionality
-const testLikeComment = async (req, res) => {
-  try {
-    console.log('=== TEST LIKE COMMENT ENDPOINT ===');
-    console.log('Request params:', req.params);
-    console.log('Request body:', req.body);
-    
-    const { blogId, commentId } = req.params;
-    const { userId } = req.body || {};
-    
-    // Basic validation
-    if (!mongoose.Types.ObjectId.isValid(blogId)) {
-      return res.status(400).json({ success: false, message: 'Invalid blog ID' });
-    }
-    
-    if (!mongoose.Types.ObjectId.isValid(commentId)) {
-      return res.status(400).json({ success: false, message: 'Invalid comment ID' });
-    }
-    
-    // Find the blog and comment
-    const blog = await Blog.findById(blogId);
-    if (!blog) {
-      return res.status(404).json({ success: false, message: 'Blog not found' });
-    }
-    
-    const comment = blog.comments.find(c => c._id.toString() === commentId);
-    if (!comment) {
-      return res.status(404).json({ success: false, message: 'Comment not found' });
-    }
-    
-    console.log('Found comment:', {
-      _id: comment._id,
-      likeCount: comment.likeCount,
-      likedBy: comment.likedBy
-    });
-    
-    return res.json({
-      success: true,
-      message: 'Test successful',
-      data: {
-        blog: { _id: blog._id, title: blog.title },
-        comment: {
-          _id: comment._id,
-          likeCount: comment.likeCount || 0,
-          likedBy: comment.likedBy || [],
-          hasLiked: (comment.likedBy || []).includes(userId)
-        }
-      }
-    });
-    
-  } catch (error) {
-    console.error('Test endpoint error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Test endpoint error',
-      error: errDetail(error)
-    });
-  }
-};
-
 // Like/Unlike a specific comment - Simple toggle system
 const likeComment = async (req, res) => {
   try {
     const { blogId, commentId } = req.params;
     const userId = req.auth && req.auth.userId;
 
-    console.log('=== LIKE COMMENT REQUEST ===');
-    console.log('Blog ID:', blogId);
-    console.log('Comment ID:', commentId);
-
     // Validate required parameters with proper MongoDB ObjectId validation
     if (!blogId || !mongoose.Types.ObjectId.isValid(blogId)) {
-      console.log('Invalid blog ID format');
       return res.status(400).json({
         success: false,
         message: 'Invalid blog ID format'
       });
     }
     if (!commentId || !mongoose.Types.ObjectId.isValid(commentId)) {
-      console.log('Invalid comment ID format');
       return res.status(400).json({
         success: false,
         message: 'Invalid comment ID format'
       });
     }
     if (!userId) {
-      console.log('Missing authenticated user');
       return res.status(401).json({
         success: false,
         message: 'Unauthorized: authentication required'
@@ -355,39 +294,33 @@ const likeComment = async (req, res) => {
     const blogObjectId = new mongoose.Types.ObjectId(blogId);
     const commentObjectId = new mongoose.Types.ObjectId(commentId);
 
-    // Find the blog with the specific comment
-    console.log('Finding blog and comment...');
-    const blog = await Blog.findOne({
-      _id: blogObjectId,
-      'comments._id': commentObjectId
-    });
+    // Fetch only the targeted comment subdocument (not the whole blog).
+    const blog = await Blog.findOne(
+      {
+        _id: blogObjectId,
+        'comments._id': commentObjectId
+      },
+      { comments: { $elemMatch: { _id: commentObjectId } } }
+    ).lean();
 
-    if (!blog) {
-      console.log('Blog or comment not found');
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Blog or comment not found' 
+    if (!blog || !blog.comments || blog.comments.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Blog or comment not found'
       });
     }
 
     // Find the specific comment in the blog
     const comment = blog.comments.find(c => c._id.toString() === commentId);
     if (!comment) {
-      console.log('Comment not found in blog');
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Comment not found in this blog post' 
+      return res.status(404).json({
+        success: false,
+        message: 'Comment not found in this blog post'
       });
     }
 
-    console.log('Current comment state:', {
-      likeCount: comment.likeCount || 0,
-      likedBy: comment.likedBy || []
-    });
-
     // Check if user has already liked this comment
     const hasLiked = Array.isArray(comment.likedBy) && comment.likedBy.includes(userId);
-    console.log('User has already liked:', hasLiked);
 
     let updateOperation;
     let message;
@@ -408,62 +341,46 @@ const likeComment = async (req, res) => {
       message = 'Comment liked successfully';
     }
 
-    console.log('Update operation:', updateOperation);
-
-    // Perform the update
+    // Perform the update (project only the toggled comment back)
     const updatedBlog = await Blog.findOneAndUpdate(
       {
         _id: blogObjectId,
         'comments._id': commentObjectId
       },
       updateOperation,
-      { 
+      {
         new: true,
-        select: 'comments'
+        select: { comments: { $elemMatch: { _id: commentObjectId } } }
       }
-    );
+    ).lean();
 
-    if (!updatedBlog) {
-      console.log('Failed to update blog');
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Failed to update comment' 
+    if (!updatedBlog || !updatedBlog.comments || updatedBlog.comments.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Failed to update comment'
       });
     }
 
     // Find the updated comment
     const updatedComment = updatedBlog.comments.find(c => c._id.toString() === commentId);
     if (!updatedComment) {
-      console.log('Updated comment not found');
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Updated comment not found' 
+      return res.status(404).json({
+        success: false,
+        message: 'Updated comment not found'
       });
     }
 
-    console.log('Updated comment state:', {
-      likeCount: updatedComment.likeCount || 0,
-      likedBy: updatedComment.likedBy || []
-    });
-    
     return res.status(200).json({
       success: true,
       message,
       data: {
         commentId: commentId,
         likeCount: Math.max(0, updatedComment.likeCount || 0),
-        isLiked: !hasLiked,
-        likedBy: updatedComment.likedBy || []
+        isLiked: !hasLiked
       }
     });
 
   } catch (error) {
-    console.error('=== ERROR IN LIKE COMMENT ===');
-    console.error('Error details:', error);
-    console.error('Error name:', error.name);
-    console.error('Error message:', error.message);
-    console.error('Error stack:', error.stack);
-    
     // Handle specific MongoDB errors
     if (error.name === 'CastError') {
       return res.status(400).json({
@@ -595,8 +512,15 @@ const voteOnComment = async (req, res) => {
 // Get single blog by slug
 const getBlogBySlug = async (req, res) => {
   try {
-    const slug = String(req.params.slug || '').toLowerCase();
-    const blog = await Blog.findOne({ slug, status: 'published' });
+    const slug = String(req.params.slug || '').toLowerCase().slice(0, 160);
+    // Single atomic read (+view bump); comments load via GET /:slug/comments.
+    const blog = await Blog.findOneAndUpdate(
+      { slug, status: 'published' },
+      { $inc: { views: 1 } },
+      { new: true }
+    )
+      .select('-comments')
+      .lean();
 
     if (!blog) {
       // Slug history: renamed posts resolve old URLs without leaking drafts
@@ -614,9 +538,6 @@ const getBlogBySlug = async (req, res) => {
       });
     }
 
-    // Increment views
-    await Blog.findByIdAndUpdate(blog._id, { $inc: { views: 1 } });
-
     res.json({
       success: true,
       data: blog
@@ -630,11 +551,30 @@ const getBlogBySlug = async (req, res) => {
   }
 };
 
+// Admin-only full blog document for the edit form (any status).
+const getBlogByIdAdmin = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ success: false, message: 'Invalid blog ID' });
+    }
+    const blog = await Blog.findById(id).lean();
+    if (!blog) {
+      return res.status(404).json({ success: false, message: 'Blog post not found' });
+    }
+    res.json({ success: true, data: blog });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching blog',
+      error: errDetail(error)
+    });
+  }
+};
+
 // Create new blog post
 const createBlog = async (req, res) => {
   try {
-    console.log('Creating blog with data:', req.body);
-    
     const {
       title,
       excerpt,
@@ -686,6 +626,14 @@ const createBlog = async (req, res) => {
     if (req.file) {
       imageUrl = `/uploads/blog-images/${req.file.filename}`;
     }
+    // Reject new base64 data-URL uploads over ~700KB: use the multipart
+    // File field instead (existing small data URLs keep working).
+    if (typeof imageUrl === 'string' && imageUrl.startsWith('data:') && imageUrl.length > 700 * 1024) {
+      return res.status(400).json({
+        success: false,
+        message: 'Featured image is too large to embed. Please upload it as an image file instead.'
+      });
+    }
     
     // Generate unique slug (manual override wins, backend always finalizes)
     const slug = await ensureUniqueSlug(requestedSlug.trim() ? requestedSlug : title);
@@ -702,34 +650,26 @@ const createBlog = async (req, res) => {
     if (parsedTags.length === 0 && typeof req.body.tagsCsv === 'string') {
       parsedTags = normalizeStringArray(req.body.tagsCsv);
     }
-    console.log('Final parsed tags:', parsedTags);
-    
+
     // Parse author properly
     let parsedAuthor = author;
-    console.log('=== CREATE BLOG AUTHOR PROCESSING ===');
-    console.log('Raw author received:', author, 'Type:', typeof author);
-    
+
     if (author !== undefined && author !== null) {
       if (typeof author === 'string') {
         try {
           parsedAuthor = JSON.parse(author);
-          console.log('JSON parsed author:', parsedAuthor);
         } catch (e) {
-          console.error('Error parsing author:', e);
           // If it's a plain string, treat it as author name
           parsedAuthor = {
             name: author,
             email: 'admin@sosapient.com',
             image: 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&dpr=1'
           };
-          console.log('Created author from string:', parsedAuthor);
         }
       } else if (typeof author === 'object') {
         parsedAuthor = author;
-        console.log('Author already object:', parsedAuthor);
       }
     } else {
-      console.log('Author is undefined/null, setting default');
       parsedAuthor = {
         name: 'Admin User',
         email: 'admin@sosapient.com',
@@ -741,9 +681,7 @@ const createBlog = async (req, res) => {
     if (!parsedAuthor.name) parsedAuthor.name = 'Admin User';
     if (!parsedAuthor.email) parsedAuthor.email = 'admin@sosapient.com';
     if (!parsedAuthor.image) parsedAuthor.image = 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&dpr=1';
-    
-    console.log('Final parsed author:', parsedAuthor);
-    
+
     let parsedSections = sections;
     if (typeof sections === 'string') {
       try {
@@ -752,30 +690,42 @@ const createBlog = async (req, res) => {
         parsedSections = [];
       }
     }
-    
+
+    // Parse SEO once (multipart sends it as a JSON string).
+    let seoObject = {};
+    if (typeof seo === 'string') {
+      try {
+        seoObject = JSON.parse(seo);
+      } catch {
+        seoObject = {};
+      }
+    } else if (seo && typeof seo === 'object') {
+      seoObject = seo;
+    }
     // Parse SEO properly
-    let parsedSeo = sanitizeSeo(typeof seo === 'string' ? (() => { try { return JSON.parse(seo); } catch { return {}; } })() : (seo || {}));
+    let parsedSeo = sanitizeSeo(seoObject);
 
     // Normalize SEO keywords array
-    parsedSeo.keywords = normalizeStringArray((typeof seo === 'string' ? (() => { try { return JSON.parse(seo).keywords; } catch { return []; } })() : seo?.keywords));
+    parsedSeo.keywords = normalizeStringArray(seoObject.keywords);
     // CSV fallback for SEO keywords
     if ((!Array.isArray(parsedSeo.keywords) || parsedSeo.keywords.length === 0) && typeof req.body.seoKeywordsCsv === 'string') {
       parsedSeo.keywords = normalizeStringArray(req.body.seoKeywordsCsv);
     }
 
+    const { sanitizeBlogHtml } = require('../utils/sanitizeRichHtml');
     const cleanImageAlt = String(imageAlt || '').trim().slice(0, 200);
     const cleanSections = Array.isArray(parsedSections) ? parsedSections.map((s) => ({
-      heading: typeof s.heading === 'string' ? s.heading : '',
-      content: typeof s.content === 'string' ? s.content : '',
-      image: typeof s.image === 'string' ? s.image : '',
+      heading: typeof s.heading === 'string' ? s.heading.trim().slice(0, 200) : '',
+      content: typeof s.content === 'string' ? sanitizeBlogHtml(s.content) : '',
+      image: typeof s.image === 'string' ? s.image.trim().slice(0, 2000) : '',
       imageAlt: typeof s.imageAlt === 'string' ? s.imageAlt.trim().slice(0, 200) : ''
     })) : [];
 
     const blog = new Blog({
-      title,
+      title: String(title).trim(),
       slug,
-      excerpt,
-      content,
+      excerpt: String(excerpt).trim(),
+      content: sanitizeBlogHtml(content),
       sections: cleanSections,
       image: imageUrl || 'https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?w=800&h=400&fit=crop&crop=center',
       imageAlt: cleanImageAlt,
@@ -853,6 +803,11 @@ const updateBlog = async (req, res) => {
     // Handle image upload
     if (req.file) {
       updateData.image = `/uploads/blog-images/${req.file.filename}`;
+    } else if (typeof updateData.image === 'string' && updateData.image.startsWith('data:') && updateData.image.length > 700 * 1024) {
+      return res.status(400).json({
+        success: false,
+        message: 'Featured image is too large to embed. Please upload it as an image file instead.'
+      });
     }
     
     // Parse JSON strings if they exist with better error handling
@@ -927,12 +882,23 @@ const updateBlog = async (req, res) => {
       }
     }
     if (Array.isArray(updateData.sections)) {
+      const { sanitizeBlogHtml: sanitizeSections } = require('../utils/sanitizeRichHtml');
       updateData.sections = updateData.sections.map((s) => ({
-        heading: typeof s.heading === 'string' ? s.heading : '',
-        content: typeof s.content === 'string' ? s.content : '',
-        image: typeof s.image === 'string' ? s.image : '',
+        heading: typeof s.heading === 'string' ? s.heading.trim().slice(0, 200) : '',
+        content: typeof s.content === 'string' ? sanitizeSections(s.content) : '',
+        image: typeof s.image === 'string' ? s.image.trim().slice(0, 2000) : '',
         imageAlt: typeof s.imageAlt === 'string' ? s.imageAlt.trim().slice(0, 200) : ''
       }));
+    }
+    if (typeof updateData.content === 'string') {
+      const { sanitizeBlogHtml: sanitizeMain } = require('../utils/sanitizeRichHtml');
+      updateData.content = sanitizeMain(updateData.content);
+    }
+    if (typeof updateData.title === 'string') {
+      updateData.title = updateData.title.trim();
+    }
+    if (typeof updateData.excerpt === 'string') {
+      updateData.excerpt = updateData.excerpt.trim();
     }
     if (updateData.imageAlt !== undefined) {
       updateData.imageAlt = String(updateData.imageAlt || '').trim().slice(0, 200);
@@ -1062,6 +1028,9 @@ const updateBlog = async (req, res) => {
 const deleteBlog = async (req, res) => {
   try {
     const { id } = req.params;
+    if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ success: false, message: 'Invalid blog ID' });
+    }
 
     const blog = await Blog.findByIdAndDelete(id);
 
@@ -1072,18 +1041,29 @@ const deleteBlog = async (req, res) => {
       });
     }
 
-    // Best-effort cleanup of local upload files (featured + section images)
+    // Best-effort cleanup of local upload files (featured + section images).
+    // Deferred past the response so file I/O never blocks the delete request.
     try {
-      const fs = require('fs');
-      const localFiles = [blog.image, ...(Array.isArray(blog.sections) ? blog.sections.map((s) => s.image) : [])]
-        .filter((p) => typeof p === 'string' && p.startsWith('/uploads/'));
-      for (const p of [...new Set(localFiles)]) {
-        try {
-          const filePath = path.join(__dirname, '..', p);
-          if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-        } catch (e) {
-          // per-file best effort
-        }
+      const localFiles = [...new Set(
+        [blog.image, ...(Array.isArray(blog.sections) ? blog.sections.map((s) => s.image) : [])]
+          .filter((p) => typeof p === 'string' && p.startsWith('/uploads/'))
+      )];
+      if (localFiles.length > 0) {
+        setImmediate(() => {
+          try {
+            const fs = require('fs');
+            for (const p of localFiles) {
+              try {
+                const filePath = path.join(__dirname, '..', p);
+                if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+              } catch (e) {
+                // per-file best effort
+              }
+            }
+          } catch (e) {
+            // best-effort cleanup only
+          }
+        });
       }
     } catch (e) {
       // best-effort cleanup only
@@ -1121,12 +1101,15 @@ const getCommentsBySlug = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Blog post not found' });
     }
 
-    // Return approved comments sorted by createdAt desc
-    const comments = (blog.comments || [])
+    // Approved comments, newest first, paginated (default 20, max 100).
+    const page = Math.min(Math.max(parseInt(req.query.page, 10) || 1, 1), 1000);
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
+    const approved = (blog.comments || [])
       .filter(c => c.approved !== false)
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    const data = approved.slice((page - 1) * limit, page * limit);
 
-    res.json({ success: true, data: comments });
+    res.json({ success: true, data, pagination: { page, limit, total: approved.length } });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error fetching comments', error: errDetail(error) });
   }
@@ -1172,7 +1155,7 @@ const addCommentById = async (req, res) => {
     const blog = await Blog.findByIdAndUpdate(
       id,
       { $push: { comments: newComment } },
-      { new: true, select: 'comments' }
+      { new: false, select: '_id' }
     );
 
     if (!blog) {
@@ -1213,14 +1196,16 @@ const editCommentById = async (req, res) => {
     }
 
     console.log('Looking for blog with comment...');
-    // Find the blog and verify comment ownership
-    // First, let's check if the comment exists at all
-    const blogWithComment = await Blog.findOne({
-      _id: blogId,
-      'comments._id': commentId
-    });
+    // Find the blog and verify comment ownership (single subdocument only)
+    const blogWithComment = await Blog.findOne(
+      {
+        _id: blogId,
+        'comments._id': commentId
+      },
+      { comments: { $elemMatch: { _id: commentId } } }
+    ).lean();
     
-    if (!blogWithComment) {
+    if (!blogWithComment || !blogWithComment.comments || blogWithComment.comments.length === 0) {
       return res.status(404).json({ 
         success: false, 
         message: 'Comment not found' 
@@ -1245,7 +1230,7 @@ const editCommentById = async (req, res) => {
       });
     }
 
-    // Update the comment - use the found blog for the update
+    // Update the comment - project only the edited subdocument back
     const updatedBlog = await Blog.findOneAndUpdate(
       {
         _id: blogId,
@@ -1257,26 +1242,72 @@ const editCommentById = async (req, res) => {
           'comments.$.updatedAt': new Date()
         }
       },
-      { new: true, select: 'comments' }
-    );
+      { new: true, select: { comments: { $elemMatch: { _id: commentId } } } }
+    ).lean();
 
-    if (!updatedBlog) {
+    if (!updatedBlog || !updatedBlog.comments || updatedBlog.comments.length === 0) {
       return res.status(404).json({ success: false, message: 'Failed to update comment' });
     }
 
     // Find the updated comment
     const updatedComment = updatedBlog.comments.find(c => c._id.toString() === commentId);
     
-    res.json({ 
-      success: true, 
-      message: 'Comment updated successfully', 
-      data: updatedComment 
+    res.json({
+      success: true,
+      message: `Fixed ${updatedCount} blogs with placeholder images`,
+      data: { updatedCount, totalFound: blogsWithPlaceholders.length }
     });
   } catch (error) {
-    res.status(500).json({ 
-      success: false, 
-      message: 'Error editing comment', 
-      error: errDetail(error) 
+    res.status(500).json({
+      success: false,
+      message: 'Error fixing placeholder images',
+      error: errDetail(error)
+    });
+  }
+};
+
+// Migrate embedded base64 featured images to /uploads files (admin-only).
+// Old saves stored multi-MB data URLs in Mongo; each migrated post shrinks
+// list/detail payloads by megabytes. Original value is kept on any failure.
+const migrateEmbeddedImages = async (req, res) => {
+  try {
+    const crypto = require('crypto');
+    const fs = require('fs');
+    const blogs = await Blog.find({ image: /^data:image\// }).select('_id title image');
+    let migrated = 0;
+    let skipped = 0;
+    const errors = [];
+    for (const blog of blogs) {
+      try {
+        const match = String(blog.image).match(/^data:(image\/(png|jpe?g|gif|webp));base64,([A-Za-z0-9+/=]+)$/);
+        if (!match) {
+          skipped++;
+          continue;
+        }
+        const ext = match[2] === 'jpeg' ? 'jpg' : match[2];
+        const buffer = Buffer.from(match[3], 'base64');
+        // Sanity: 50KB–15MB; tiny icons stay inline, huge files stay untouched.
+        if (buffer.length < 50 * 1024 || buffer.length > 15 * 1024 * 1024) {
+          skipped++;
+          continue;
+        }
+        const filename = `migrated-${String(blog._id)}-${crypto.randomBytes(4).toString('hex')}.${ext}`;
+        const dir = path.join(__dirname, '..', 'uploads', 'blog-images');
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(path.join(dir, filename), buffer);
+        await Blog.findByIdAndUpdate(blog._id, { image: `/uploads/blog-images/${filename}` });
+        migrated++;
+      } catch (e) {
+        errors.push(String(blog._id));
+      }
+      if (migrated + skipped + errors.length >= 200) break;
+    }
+    res.json({ success: true, data: { scanned: blogs.length, migrated, skipped, failed: errors } });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error migrating embedded images',
+      error: errDetail(error)
     });
   }
 };
@@ -1299,14 +1330,16 @@ const deleteCommentById = async (req, res) => {
       return res.status(401).json({ success: false, message: 'Unauthorized: authentication required' });
     }
 
-    // Find the blog and verify comment ownership
-    // First, let's check if the comment exists at all
-    const blogWithComment = await Blog.findOne({
-      _id: blogId,
-      'comments._id': commentId
-    });
+    // Find the blog and verify comment ownership (single subdocument only)
+    const blogWithComment = await Blog.findOne(
+      {
+        _id: blogId,
+        'comments._id': commentId
+      },
+      { comments: { $elemMatch: { _id: commentId } } }
+    ).lean();
     
-    if (!blogWithComment) {
+    if (!blogWithComment || !blogWithComment.comments || blogWithComment.comments.length === 0) {
       return res.status(404).json({ 
         success: false, 
         message: 'Comment not found' 
@@ -1331,7 +1364,7 @@ const deleteCommentById = async (req, res) => {
       });
     }
 
-    // Remove the comment - simplified query without userId constraint for legacy comments
+    // Remove the comment (no document fetch needed — ownership already verified)
     const updatedBlog = await Blog.findOneAndUpdate(
       {
         _id: blogId
@@ -1341,7 +1374,7 @@ const deleteCommentById = async (req, res) => {
           comments: { _id: commentId }
         }
       },
-      { new: true }
+      { new: false, select: '_id' }
     );
 
     if (!updatedBlog) {
@@ -1391,6 +1424,7 @@ const getFeaturedBlogs = async (req, res) => {
     })
     .sort({ publishedAt: -1 })
     .limit(limit)
+    .select('title slug excerpt image imageAlt author category tags readTime status featured publishedAt createdAt views likes')
     .lean();
     
     res.json({
@@ -1410,12 +1444,15 @@ const getFeaturedBlogs = async (req, res) => {
 const likeBlog = async (req, res) => {
   try {
     const { id } = req.params;
-    
+    if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ success: false, message: 'Invalid blog ID' });
+    }
+
     const blog = await Blog.findByIdAndUpdate(
       id,
       { $inc: { likes: 1 } },
       { new: true }
-    );
+    ).select('likes');
     
     if (!blog) {
       return res.status(404).json({
@@ -1441,16 +1478,17 @@ const likeBlog = async (req, res) => {
 // Get blog statistics
 const getBlogStats = async (req, res) => {
   try {
-    const totalBlogs = await Blog.countDocuments({ status: 'published' });
-    const totalViews = await Blog.aggregate([
-      { $match: { status: 'published' } },
-      { $group: { _id: null, totalViews: { $sum: '$views' } } }
-    ]);
-    
-    const categoryStats = await Blog.aggregate([
-      { $match: { status: 'published' } },
-      { $group: { _id: '$category', count: { $sum: 1 } } },
-      { $sort: { count: -1 } }
+    const [totalBlogs, totalViews, categoryStats] = await Promise.all([
+      Blog.countDocuments({ status: 'published' }),
+      Blog.aggregate([
+        { $match: { status: 'published' } },
+        { $group: { _id: null, totalViews: { $sum: '$views' } } }
+      ]),
+      Blog.aggregate([
+        { $match: { status: 'published' } },
+        { $group: { _id: '$category', count: { $sum: 1 } } },
+        { $sort: { count: -1 } }
+      ])
     ]);
     
     res.json({
@@ -1526,6 +1564,7 @@ module.exports = {
   getAllBlogs,
   getAllBlogsAdmin,
   getBlogBySlug,
+  getBlogByIdAdmin,
   createBlog,
   updateBlog,
   deleteBlog,
@@ -1534,6 +1573,7 @@ module.exports = {
   likeBlog,
   getBlogStats,
   fixPlaceholderImages,
+  migrateEmbeddedImages,
   upload,
   commentAvatarUpload,
   getCommentsBySlug,
@@ -1541,6 +1581,5 @@ module.exports = {
   editCommentById,
   deleteCommentById,
   voteOnComment,
-  likeComment,
-  testLikeComment
+  likeComment
 };

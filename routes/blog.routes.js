@@ -4,6 +4,7 @@ const {
   getAllBlogs,
   getAllBlogsAdmin,
   getBlogBySlug,
+  getBlogByIdAdmin,
   createBlog,
   updateBlog,
   deleteBlog,
@@ -12,6 +13,7 @@ const {
   likeBlog,
   getBlogStats,
   fixPlaceholderImages,
+  migrateEmbeddedImages,
   upload,
   getCommentsBySlug,
   addCommentById,
@@ -51,10 +53,13 @@ router.post('/:blogId/comments/:commentId/like', authenticateUser, rateLimit({ w
 
 // Admin routes (JWT + ADMIN role)
 router.get('/admin', authenticateUser, requireAdmin, getAllBlogsAdmin);
+// Full document for the edit form (must precede /:slug to avoid slug capture)
+router.get('/admin/:id', authenticateUser, requireAdmin, getBlogByIdAdmin);
 router.post('/', authenticateUser, requireAdmin, rateLimit({ windowMs: 60000, max: 20 }), upload.single('image'), handleUploadError, createBlog);
 router.put('/:id', authenticateUser, requireAdmin, upload.single('image'), handleUploadError, updateBlog);
 router.delete('/:id', authenticateUser, requireAdmin, deleteBlog);
 router.post('/fix-placeholders', authenticateUser, requireAdmin, fixPlaceholderImages);
+router.post('/migrate-images', authenticateUser, requireAdmin, migrateEmbeddedImages);
 
 // This route should be last as it's most generic
 router.get('/:slug', getBlogBySlug);

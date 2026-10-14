@@ -55,9 +55,27 @@ function sanitizeRichHtml(value) {
   return sanitizeHtml(value, JOB_HTML_OPTIONS);
 }
 
-// Sanitize one rich-text field: string passes through, arrays sanitize
-// each string item (non-strings dropped), anything else passes through
-// for schema validation to reject.
+// Blog posts may embed images inside CKEditor content (sections also have
+// dedicated image fields). Same strict rules as jobs, plus figure/img.
+// img src is limited to http/https (no data: URIs) to match the frontend
+// renderer, which strips data: URLs on display.
+const BLOG_HTML_OPTIONS = {
+  ...JOB_HTML_OPTIONS,
+  allowedTags: [...JOB_HTML_OPTIONS.allowedTags, 'img', 'figure', 'figcaption'],
+  allowedAttributes: {
+    ...JOB_HTML_OPTIONS.allowedAttributes,
+    img: ['src', 'alt', 'title', 'width', 'height', 'loading', 'decoding'],
+    figure: ['class'],
+    figcaption: [],
+  },
+  allowedSchemesAppliedToAttributes: ['href', 'src'],
+};
+
+function sanitizeBlogHtml(value) {
+  if (typeof value !== 'string') return value;
+  if (value === '') return value;
+  return sanitizeHtml(value, BLOG_HTML_OPTIONS);
+}
 function sanitizeRichField(value) {
   if (typeof value === 'string') return sanitizeRichHtml(value);
   if (Array.isArray(value)) {
@@ -76,4 +94,4 @@ function richTextLength(value) {
     .trim().length;
 }
 
-module.exports = { JOB_HTML_OPTIONS, sanitizeRichHtml, sanitizeRichField, richTextLength };
+module.exports = { JOB_HTML_OPTIONS, BLOG_HTML_OPTIONS, sanitizeRichHtml, sanitizeBlogHtml, sanitizeRichField, richTextLength };

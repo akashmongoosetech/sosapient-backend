@@ -144,8 +144,11 @@ blogSchema.pre('save', function(next) {
 blogSchema.index({ title: 'text', excerpt: 'text', content: 'text' });
 blogSchema.index({ category: 1, status: 1 });
 blogSchema.index({ publishedAt: -1 });
-blogSchema.index({ slug: 1 });
 blogSchema.index({ previousSlugs: 1 });
 blogSchema.index({ status: 1, featured: 1, publishedAt: -1 });
+// Admin list sorting/filtering + comment subdocument lookups
+blogSchema.index({ status: 1, createdAt: -1 });
+blogSchema.index({ status: 1, category: 1, featured: 1 });
+blogSchema.index({ 'comments._id': 1 });
 
 module.exports = mongoose.model('Blog', blogSchema);
