@@ -16,13 +16,13 @@ EMAIL_HOST=smtp.gmail.com
 EMAIL_PORT=587
 EMAIL_USER=your-gmail-address@gmail.com
 EMAIL_PASS=your-16-character-app-password
-ADMIN_EMAIL=admin@sosapient.com
+ADMIN_EMAIL=admin@sosapient.in
 ```
 
 ## Step 3: Replace the placeholders
-- `your-gmail-address@gmail.com` → Your actual Gmail address
+- `your-gmail-address@gmail.com` → The Gmail account used for sending via Gmail SMTP
 - `your-16-character-app-password` → The app password from Step 1
-- `admin@sosapient.com` → Email where you want to receive contact form submissions
+- `admin@sosapient.in` → Email where you want to receive contact form submissions
 
 ## Step 4: Restart the server
 After updating the .env file, restart your backend server with `npm start`

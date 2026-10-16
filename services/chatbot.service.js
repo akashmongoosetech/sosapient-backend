@@ -136,7 +136,7 @@ function getBusinessContactInformation() {
   return {
     website: SITE_URL,
     contactPage: `${SITE_URL}/contact`,
-    email: 'info.sosapient@gmail.com',
+    email: 'admin@sosapient.in',
     supportPhone: '+91-9685533878',
     hrPhone: '+91-8815596247',
     address: 'Anand Nagar, Vasant Vihar, Ujjain (M.P.) 456010, India',

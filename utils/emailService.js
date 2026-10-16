@@ -129,7 +129,7 @@ const getApplicantEmailTemplate = (career) => {
         </div>
         <p style="color: #999; font-size: 12px;">© ${new Date().getFullYear()} SoSapient. All rights reserved.<br/>
         <a href="https://sosapient.in" style="color: #007BFF; text-decoration: none;">Visit our Website</a> |
-        <a href="mailto:hr.sosapient@gmail.com" style="color: #007BFF; text-decoration: none;">hr.sosapient@gmail.com</a></p>
+        <a href="mailto:career@sosapient.in" style="color: #007BFF; text-decoration: none;">career@sosapient.in</a></p>
       </div>
     </div>
   </div>

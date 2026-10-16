@@ -120,7 +120,7 @@ async function indexBusinessInfo() {
     sections: [
       {
         label: 'business contact',
-        text: 'SoSapient is a software company in Ujjain, Madhya Pradesh, India, serving clients worldwide. Contact via the contact page at /contact or email info.sosapient@gmail.com, support +91-9685533878.'
+        text: 'SoSapient is a software company in Ujjain, Madhya Pradesh, India, serving clients worldwide. Contact via the contact page at /contact or email admin@sosapient.in, support +91-9685533878.'
       }
     ],
     published: true
