@@ -840,13 +840,19 @@ const updateBlog = async (req, res) => {
       };
     }
 
-    // Parse tags properly - same logic as createBlog
-    let parsedTags = normalizeStringArray(updateData.tags);
-    // CSV fallback if tags couldn't be parsed from main field
-    if (parsedTags.length === 0 && typeof updateData.tagsCsv === 'string') {
-      parsedTags = normalizeStringArray(updateData.tagsCsv);
+    // Parse tags properly - same logic as createBlog, but only when sent:
+    // absent keys must not wipe stored tags.
+    const tagsWasSent = updateData.tags !== undefined || updateData.tagsCsv !== undefined;
+    if (tagsWasSent) {
+      let parsedTags = normalizeStringArray(updateData.tags);
+      // CSV fallback if tags couldn't be parsed from main field
+      if (parsedTags.length === 0 && typeof updateData.tagsCsv === 'string') {
+        parsedTags = normalizeStringArray(updateData.tagsCsv);
+      }
+      updateData.tags = parsedTags;
+    } else {
+      delete updateData.tags;
     }
-    updateData.tags = parsedTags;
 
     // Parse SEO properly - same logic as createBlog, with length validation.
     // Merge over the stored subdocument so edits that omit OG/Twitter/canonical
@@ -979,12 +985,13 @@ const updateBlog = async (req, res) => {
       }
     });
 
-    // Ensure tags and seo are always included in the update, even if empty
+    // Omit-if-absent: only overwrite tags/seo when the client sent them.
+    // (An explicit [] from the admin form still clears intentionally.)
     if (!updateData.hasOwnProperty('tags')) {
-      updateData.tags = [];
+      delete updateData.tags;
     }
     if (!updateData.hasOwnProperty('seo')) {
-      updateData.seo = { metaTitle: '', metaDescription: '', keywords: [] };
+      delete updateData.seo;
     }
     // Drop CSV helpers before Mongo update
     delete updateData.tagsCsv;

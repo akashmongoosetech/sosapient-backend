@@ -98,7 +98,19 @@ try {
 } catch (e) {
   console.warn('Warning: could not ensure uploads directories exist:', e.message);
 }
-app.use('/uploads', express.static(uploadsDir, { maxAge: '7d', etag: true, lastModified: true }));
+// Public uploads are meant to be embedded cross-origin (<img> on the site,
+// which may live on another origin). Override the API-wide same-origin
+// CORP/COOP headers for these files, otherwise browsers refuse to render
+// them with ERR_BLOCKED_BY_RESPONSE.
+app.use('/uploads', express.static(uploadsDir, {
+  maxAge: '7d',
+  etag: true,
+  lastModified: true,
+  setHeaders: (res) => {
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.removeHeader('Cross-Origin-Opener-Policy');
+  }
+}));
 
 // Import routes
 const authRoutes = require('./routes/auth.routes');
