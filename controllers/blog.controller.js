@@ -848,8 +848,11 @@ const updateBlog = async (req, res) => {
     }
     updateData.tags = parsedTags;
 
-    // Parse SEO properly - same logic as createBlog, with length validation
+    // Parse SEO properly - same logic as createBlog, with length validation.
+    // Merge over the stored subdocument so edits that omit OG/Twitter/canonical
+    // fields preserve existing values instead of wiping them.
     let rawSeo = updateData.seo;
+    const seoWasSent = rawSeo !== undefined;
     if (typeof rawSeo === 'string') {
       try {
         rawSeo = JSON.parse(rawSeo);
@@ -867,7 +870,22 @@ const updateBlog = async (req, res) => {
       parsedSeo.keywords = normalizeStringArray(updateData.seoKeywordsCsv);
     }
 
-    updateData.seo = parsedSeo;
+    if (seoWasSent) {
+      const stored = await Blog.findById(id).select('seo').lean();
+      const storedSeo = (stored && stored.seo) || {};
+      for (const k of ['metaTitle', 'metaDescription', 'canonicalUrl', 'ogTitle', 'ogDescription', 'ogImage', 'twitterTitle', 'twitterDescription', 'twitterImage']) {
+        if ((parsedSeo[k] === undefined || parsedSeo[k] === '') && storedSeo[k]) {
+          parsedSeo[k] = storedSeo[k];
+        }
+      }
+      if ((!parsedSeo.keywords || parsedSeo.keywords.length === 0) && Array.isArray(storedSeo.keywords)) {
+        parsedSeo.keywords = storedSeo.keywords;
+      }
+    } else {
+      delete updateData.seo;
+    }
+
+    if (seoWasSent) updateData.seo = parsedSeo;
 
     // Handle sections parsing (with imageAlt passthrough)
     if (updateData.sections && typeof updateData.sections === 'string') {
