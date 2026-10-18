@@ -46,8 +46,11 @@ router.get('/subscribers', authenticateUser, requireAdmin, async (req, res) => {
   try {
     const page = Math.min(Math.max(parseInt(req.query.page, 10) || 1, 1), 1000);
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 100);
-    const subscribers = await Subscriber.find().sort({ subscribedAt: -1 }).skip((page - 1) * limit).limit(limit);
-    res.json({ success: true, data: subscribers, pagination: { page, limit } });
+    const [subscribers, total] = await Promise.all([
+      Subscriber.find().sort({ subscribedAt: -1 }).skip((page - 1) * limit).limit(limit),
+      Subscriber.countDocuments()
+    ]);
+    res.json({ success: true, data: subscribers, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error fetching subscribers' });
   }

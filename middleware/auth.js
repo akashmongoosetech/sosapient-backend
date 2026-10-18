@@ -28,16 +28,18 @@ async function authenticateUser(req, res, next) {
     if (!userId) {
       return res.status(401).json({ success: false, message: 'Unauthorized: invalid token' });
     }
-    // Refresh tokens must never access resources
-    if (payload.type === 'refresh') {
+    // Only access tokens may authenticate requests. Refresh tokens, and any
+    // pre-rotation legacy token that lacks a `type`/`tv` claim, are rejected so
+    // that revocation via tokenVersion can never be bypassed by an old token.
+    if (payload.type !== 'access' || payload.tv === undefined) {
       return res.status(401).json({ success: false, message: 'Unauthorized: invalid token type' });
     }
     const user = await User.findById(userId);
     if (!user) {
       return res.status(401).json({ success: false, message: 'Unauthorized: user not found' });
     }
-    // Token version check: bumped on password change / reuse detection. Legacy tokens without tv pass.
-    if (payload.tv !== undefined && (user.tokenVersion || 0) !== payload.tv) {
+    // Token version check: bumped on password change / reuse detection.
+    if ((user.tokenVersion || 0) !== payload.tv) {
       return res.status(401).json({ success: false, message: 'Unauthorized: session revoked' });
     }
     req.user = user;
@@ -59,4 +61,28 @@ function requireAdmin(req, res, next) {
   return next();
 }
 
-module.exports = { authenticateUser, requireAdmin };
+// Optional authentication: attaches req.user/req.auth when a valid access token
+// is present, but NEVER rejects the request. Used by public endpoints that still
+// want to attribute the action to a signed-in user (e.g. blog comments).
+async function optionalAuth(req, res, next) {
+  const token = getBearerToken(req);
+  if (!token) return next();
+  try {
+    const secret = process.env.JWT_SECRET;
+    if (!secret || secret === 'your-jwt-secret-key-here') return next();
+    const payload = jwt.verify(token, secret);
+    if (payload.type !== 'access' || payload.tv === undefined) return next();
+    const userId = payload.sub || payload.userId;
+    if (!userId) return next();
+    const user = await User.findById(userId);
+    if (!user) return next();
+    if ((user.tokenVersion || 0) !== payload.tv) return next();
+    req.user = user;
+    req.auth = { userId: String(user._id), role: user.role };
+  } catch {
+    // Invalid/expired token → treat as anonymous; do not block the request.
+  }
+  return next();
+}
+
+module.exports = { authenticateUser, requireAdmin, optionalAuth };

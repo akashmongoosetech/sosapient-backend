@@ -57,11 +57,14 @@ exports.getAllContacts = async (req, res) => {
   try {
     const page = Math.min(Math.max(parseInt(req.query.page, 10) || 1, 1), 1000);
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 100);
-    const contacts = await Contact.find().sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit);
+    const [contacts, total] = await Promise.all([
+      Contact.find().sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit),
+      Contact.countDocuments()
+    ]);
     res.status(200).json({
       success: true,
       data: contacts,
-      pagination: { page, limit }
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) }
     });
   } catch (error) {
     res.status(500).json({

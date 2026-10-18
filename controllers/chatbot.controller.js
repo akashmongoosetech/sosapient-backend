@@ -43,6 +43,22 @@ function recordStat(intent, source, latencyMs) {
   if (source === 'fallback') stats.fallbacks += 1;
 }
 
+// ---- Global daily ceiling on chatbot calls (LLM cost-abuse guard) ----
+// Per-instance; resets at UTC midnight. Set CHATBOT_DAILY_MAX=0 to disable.
+const dailyBudget = { day: new Date().toISOString().slice(0, 10), count: 0 };
+function dailyCapReached() {
+  const max = parseInt(process.env.CHATBOT_DAILY_MAX, 10);
+  if (!Number.isFinite(max) || max <= 0) return false;
+  const today = new Date().toISOString().slice(0, 10);
+  if (dailyBudget.day !== today) {
+    dailyBudget.day = today;
+    dailyBudget.count = 0;
+  }
+  if (dailyBudget.count >= max) return true;
+  dailyBudget.count += 1;
+  return false;
+}
+
 // ---- Sessions (server-side short-term memory, 24h TTL) ----
 function acceptSessionId(raw) {
   const v = String(raw || '').trim();
@@ -170,6 +186,13 @@ async function message(req, res) {
     const raw = typeof message === 'string' ? message : '';
     if (!raw.trim() || raw.length > 2000) {
       return res.status(400).json({ success: false, message: 'Message is required (1-2000 chars)' });
+    }
+    // Reject early (before any LLM call) once the daily ceiling is hit.
+    if (dailyCapReached()) {
+      return res.status(429).json({
+        success: false,
+        message: "I've reached my daily limit for now. Please try again later or use our contact form."
+      });
     }
     const text = chatbot.normalizeQuery(raw);
     const cleanHistory = clampHistory(history);

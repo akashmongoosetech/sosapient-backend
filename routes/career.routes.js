@@ -10,11 +10,16 @@ const {
 const { upload, handleMulterError } = require('../middleware/upload');
 const { authenticateUser, requireAdmin } = require('../middleware/auth');
 const { rateLimit } = require('../middleware/rateLimit');
+const { verifyRecaptcha } = require('../middleware/recaptcha');
 const { sanitizeFilename } = require('../utils/sanitize');
 const Career = require('../models/career.model');
 
-// Create new career application (public, rate-limited)
-router.post('/', rateLimit({ windowMs: 60000, max: 10 }), upload.single('resume'), handleMulterError, createCareer);
+// Create new career application (public, rate-limited).
+// Order matters: rate-limit -> parse multipart (memory only) -> CAPTCHA verify
+// -> controller (DB insert + email). The CAPTCHA check always precedes any
+// irreversible side effect, and memoryStorage means unverified uploads are
+// never written to disk.
+router.post('/', rateLimit({ windowMs: 60000, max: 10 }), upload.single('resume'), handleMulterError, verifyRecaptcha, createCareer);
 
 // Get all career applications (ADMIN only)
 router.get('/', authenticateUser, requireAdmin, getAllCareers);

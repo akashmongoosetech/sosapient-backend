@@ -43,7 +43,8 @@ const getAllJobs = async (req, res) => {
     const page = Math.min(Math.max(parseInt(req.query.page, 10) || 1, 1), 1000);
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 100);
     const jobs = await Job.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit);
-    res.json({ success: true, data: jobs, pagination: { page, limit } });
+    const total = await Job.countDocuments(filter);
+    res.json({ success: true, data: jobs, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
   } catch (error) {
     res.status(500).json({ success: false, message: errMessage(error, 'Error fetching jobs') });
   }

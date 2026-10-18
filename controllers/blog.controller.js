@@ -1132,7 +1132,14 @@ const getCommentsBySlug = async (req, res) => {
     const approved = (blog.comments || [])
       .filter(c => c.approved !== false)
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    const data = approved.slice((page - 1) * limit, page * limit);
+    // Never expose commenter email addresses on the public read path (PII).
+    const data = approved
+      .slice((page - 1) * limit, page * limit)
+      .map((c) => {
+        const obj = typeof c.toObject === 'function' ? c.toObject() : { ...c };
+        delete obj.email;
+        return obj;
+      });
 
     res.json({ success: true, data, pagination: { page, limit, total: approved.length } });
   } catch (error) {
@@ -1156,19 +1163,20 @@ const addCommentById = async (req, res) => {
     if (!name || !email || !comment) {
       return res.status(400).json({ success: false, message: 'Name, email and comment are required' });
     }
-    const emailOk = /.+@.+\..+/.test(String(email));
+    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email));
     if (!emailOk) {
       return res.status(400).json({ success: false, message: 'Invalid email address' });
     }
 
-    // Build new comment (ownership derived server-side only; never trust client userId)
+    // Build new comment. Ownership is derived server-side from the (optional)
+    // authenticated user — a client-supplied userId is never trusted.
     const newComment = {
       _id: new mongoose.Types.ObjectId(),
       name: String(name).trim().slice(0, 100),
       email: String(email).trim().toLowerCase().slice(0, 160),
       comment: String(comment).trim().slice(0, 5000),
-      userId: null, // public comments are anonymous; ownership assigned only via authenticated edit flow
-      approved: true,
+      userId: (req.auth && req.auth.userId) ? req.auth.userId : null,
+      approved: process.env.COMMENTS_REQUIRE_APPROVAL === 'true' ? false : true,
       createdAt: new Date()
     };
 
@@ -1220,7 +1228,6 @@ const editCommentById = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Comment cannot exceed 5000 characters' });
     }
 
-    console.log('Looking for blog with comment...');
     // Find the blog and verify comment ownership (single subdocument only)
     const blogWithComment = await Blog.findOne(
       {
@@ -1276,16 +1283,16 @@ const editCommentById = async (req, res) => {
 
     // Find the updated comment
     const updatedComment = updatedBlog.comments.find(c => c._id.toString() === commentId);
-    
+
     res.json({
       success: true,
-      message: `Fixed ${updatedCount} blogs with placeholder images`,
-      data: { updatedCount, totalFound: blogsWithPlaceholders.length }
+      message: 'Comment updated successfully',
+      data: updatedComment
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Error fixing placeholder images',
+      message: 'Error updating comment',
       error: errDetail(error)
     });
   }

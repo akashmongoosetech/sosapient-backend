@@ -23,7 +23,7 @@ const {
   voteOnComment,
   likeComment
 } = require('../controllers/blog.controller');
-const { authenticateUser, requireAdmin } = require('../middleware/auth');
+const { authenticateUser, requireAdmin, optionalAuth } = require('../middleware/auth');
 const { rateLimit } = require('../middleware/rateLimit');
 
 function handleUploadError(err, req, res, next) {
@@ -42,7 +42,7 @@ router.get('/featured', getFeaturedBlogs);
 router.get('/stats', authenticateUser, requireAdmin, getBlogStats);
 router.post('/:id/like', rateLimit({ windowMs: 60000, max: 20 }), likeBlog);
 router.get('/:slug/comments', getCommentsBySlug);
-router.post('/:id/comments', rateLimit({ windowMs: 60000, max: 15 }), commentAvatarUpload.single('avatar'), handleUploadError, addCommentById);
+router.post('/:id/comments', rateLimit({ windowMs: 60000, max: 15 }), optionalAuth, commentAvatarUpload.single('avatar'), handleUploadError, addCommentById);
 
 // Comment edit/delete/vote/like - identity comes from JWT, never the body
 router.put('/:blogId/comments/:commentId', authenticateUser, rateLimit({ windowMs: 60000, max: 15 }), editCommentById);

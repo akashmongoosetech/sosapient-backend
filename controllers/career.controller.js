@@ -65,11 +65,14 @@ const getAllCareers = async (req, res) => {
   try {
     const page = Math.min(Math.max(parseInt(req.query.page, 10) || 1, 1), 1000);
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 100);
-    const careers = await Career.find().select('-resume.data').sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit);
+    const [careers, total] = await Promise.all([
+      Career.find().select('-resume.data').sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit),
+      Career.countDocuments()
+    ]);
     res.status(200).json({
       success: true,
       data: careers,
-      pagination: { page, limit }
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) }
     });
   } catch (error) {
     res.status(500).json({
