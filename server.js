@@ -159,6 +159,9 @@ const dealRoutes = require('./routes/deal.routes');
 app.use('/api/deals', dealRoutes);
 const chatbotRoutes = require('./routes/chatbot.routes');
 app.use('/api/chatbot', chatbotRoutes);
+// Uploaded images (blog featured images, comment avatars) served from MongoDB.
+const imageRoutes = require('./routes/image.routes');
+app.use('/api/images', imageRoutes);
 
 // 404 for unknown API routes
 app.use('/api', (req, res) => {

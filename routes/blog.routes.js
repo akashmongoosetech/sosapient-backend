@@ -13,7 +13,7 @@ const {
   likeBlog,
   getBlogStats,
   fixPlaceholderImages,
-  migrateEmbeddedImages,
+  migrateImages,
   upload,
   getCommentsBySlug,
   addCommentById,
@@ -59,7 +59,7 @@ router.post('/', authenticateUser, requireAdmin, rateLimit({ windowMs: 60000, ma
 router.put('/:id', authenticateUser, requireAdmin, upload.single('image'), handleUploadError, updateBlog);
 router.delete('/:id', authenticateUser, requireAdmin, deleteBlog);
 router.post('/fix-placeholders', authenticateUser, requireAdmin, fixPlaceholderImages);
-router.post('/migrate-images', authenticateUser, requireAdmin, migrateEmbeddedImages);
+router.post('/migrate-images', authenticateUser, requireAdmin, migrateImages);
 
 // This route should be last as it's most generic
 router.get('/:slug', getBlogBySlug);

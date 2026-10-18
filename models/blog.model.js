@@ -39,6 +39,12 @@ const blogSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  // Object-storage handle for `image`, used to clean up the old file when the
+  // featured image is replaced or the post is deleted.
+  imageFileId: {
+    type: String,
+    default: null
+  },
   imageAlt: {
     type: String,
     trim: true,
@@ -116,6 +122,7 @@ const blogSchema = new mongoose.Schema({
       email: { type: String, required: true, trim: true, lowercase: true },
       comment: { type: String, required: true, maxlength: 5000 }, // Increased from 2000 to 5000 characters
       avatar: { type: String },
+      avatarFileId: { type: String, default: null },
       userId: { type: String }, // Add userId to track comment ownership
       likeCount: { type: Number, default: 0 },
       dislikeCount: { type: Number, default: 0 },

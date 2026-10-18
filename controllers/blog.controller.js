@@ -2,6 +2,17 @@ const mongoose = require('mongoose');
 const Blog = require('../models/blog.model');
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
+const {
+  ImageStorageError,
+  storeImage,
+  deleteStoredImage,
+  isStoredImageUrl,
+  isLocalUploadPath,
+  isDataImageUrl,
+  decodeDataImageUrl,
+  localPathForUploadUrl
+} = require('../services/imageStorage');
 
 function escapeRegExp(value) {
   return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&').slice(0, 100);
@@ -81,18 +92,12 @@ function normalizeStringArray(input) {
     .filter(v => v.length > 0);
 }
 
-// Configure multer for image uploads (random hex names; ext allowlisted, never trusted as executable)
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, 'uploads/blog-images/');
-  },
-  filename: function (req, file, cb) {
-    const crypto = require('crypto');
-    const ext = String(path.extname(file.originalname || '')).toLowerCase();
-    const safeExt = ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext) ? ext : '.bin';
-    cb(null, 'blog-' + Date.now() + '-' + crypto.randomBytes(8).toString('hex') + safeExt);
-  }
-});
+// Uploads are buffered in memory and then handed to services/imageStorage, which
+// stores them in MongoDB and returns a URL to serve them back from. Buffering
+// first means we never leave a file on disk or persist a URL for an image that
+// failed to store. Extension/type allowlisting still happens in fileFilter
+// below and again in the storage layer.
+const storage = multer.memoryStorage();
 
 const upload = multer({
   storage: storage,
@@ -115,18 +120,8 @@ const upload = multer({
   }
 });
 
-// Configure multer for comment avatar uploads (random hex names; ext allowlisted)
-const commentAvatarStorage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, 'uploads/comment-avatars/');
-  },
-  filename: function (req, file, cb) {
-    const crypto = require('crypto');
-    const ext = String(path.extname(file.originalname || '')).toLowerCase();
-    const safeExt = ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext) ? ext : '.bin';
-    cb(null, 'avatar-' + Date.now() + '-' + crypto.randomBytes(8).toString('hex') + safeExt);
-  }
-});
+// Comment avatars use the same buffer-then-store flow as blog images.
+const commentAvatarStorage = multer.memoryStorage();
 
 const commentAvatarUpload = multer({
   storage: commentAvatarStorage,
@@ -621,13 +616,21 @@ const createBlog = async (req, res) => {
       });
     }
     
-    // Handle image upload
+    // Handle image upload. The bytes are stored in MongoDB and only the URL is
+    // persisted, so a later deploy cannot orphan the image.
     let imageUrl = req.body.image;
+    let imageFileId = null;
     if (req.file) {
-      imageUrl = `/uploads/blog-images/${req.file.filename}`;
+      const stored = await storeImage(req.file.buffer, {
+        originalName: req.file.originalname,
+        mimeType: req.file.mimetype,
+        folder: 'blog-images'
+      });
+      imageUrl = stored.url;
+      imageFileId = stored.fileId;
     }
-    // Reject new base64 data-URL uploads over ~700KB: use the multipart
-    // File field instead (existing small data URLs keep working).
+    // Reject oversized base64 data-URL images: upload the file instead so the
+    // bytes live in the image store rather than inside the Mongo document.
     if (typeof imageUrl === 'string' && imageUrl.startsWith('data:') && imageUrl.length > 700 * 1024) {
       return res.status(400).json({
         success: false,
@@ -728,6 +731,7 @@ const createBlog = async (req, res) => {
       content: sanitizeBlogHtml(content),
       sections: cleanSections,
       image: imageUrl || 'https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?w=800&h=400&fit=crop&crop=center',
+      imageFileId,
       imageAlt: cleanImageAlt,
       category,
       tags: parsedTags,
@@ -762,6 +766,9 @@ const createBlog = async (req, res) => {
     });
   } catch (error) {
     console.error('Error creating blog post:', error.message || error);
+    if (error instanceof ImageStorageError) {
+      return res.status(error.status || 502).json({ success: false, message: error.message });
+    }
     if (error && error.code === 11000) {
       return res.status(409).json({
         success: false,
@@ -799,10 +806,17 @@ const updateBlog = async (req, res) => {
     }
 
     const updateData = pickBlogWrite(req.body);
-    
-    // Handle image upload
+
+    // Handle image upload. The bytes are stored in MongoDB; only the URL is
+    // persisted.
     if (req.file) {
-      updateData.image = `/uploads/blog-images/${req.file.filename}`;
+      const stored = await storeImage(req.file.buffer, {
+        originalName: req.file.originalname,
+        mimeType: req.file.mimetype,
+        folder: 'blog-images'
+      });
+      updateData.image = stored.url;
+      updateData.imageFileId = stored.fileId;
     } else if (typeof updateData.image === 'string' && updateData.image.startsWith('data:') && updateData.image.length > 700 * 1024) {
       return res.status(400).json({
         success: false,
@@ -943,8 +957,9 @@ const updateBlog = async (req, res) => {
     }
     
     // Handle slug: manual override wins; otherwise regenerate only if title changed
+    let previousImageFileId = null;
     {
-      const currentBlog = await Blog.findById(id).select('title slug previousSlugs');
+      const currentBlog = await Blog.findById(id).select('title slug previousSlugs imageFileId');
 
       if (!currentBlog) {
         return res.status(404).json({
@@ -952,6 +967,7 @@ const updateBlog = async (req, res) => {
           message: 'Blog post not found'
         });
       }
+      previousImageFileId = currentBlog.imageFileId || null;
 
       const manualSlug = typeof updateData.slug === 'string' ? buildSlug(updateData.slug) : '';
       const titleChanged = typeof updateData.title === 'string' && updateData.title !== currentBlog.title;
@@ -1009,6 +1025,12 @@ const updateBlog = async (req, res) => {
       });
     }
 
+    // The featured image was replaced: drop the previous object from storage.
+    // Best effort — a stray file is harmless, a failed update is not.
+    if (updateData.imageFileId && previousImageFileId && previousImageFileId !== updateData.imageFileId) {
+      void deleteStoredImage(previousImageFileId);
+    }
+
     try {
       require('../services/ragIndex').queueBlogIndex(blog);
     } catch (e) {
@@ -1021,6 +1043,9 @@ const updateBlog = async (req, res) => {
       data: blog
     });
   } catch (error) {
+    if (error instanceof ImageStorageError) {
+      return res.status(error.status || 502).json({ success: false, message: error.message });
+    }
     // Check for validation errors
     if (error.name === 'ValidationError') {
       const validationErrors = Object.values(error.errors).map(err => err.message);
@@ -1066,6 +1091,9 @@ const deleteBlog = async (req, res) => {
       });
     }
 
+    // Best-effort removal of the stored featured image.
+    if (blog.imageFileId) void deleteStoredImage(blog.imageFileId);
+
     // Best-effort cleanup of local upload files (featured + section images).
     // Deferred past the response so file I/O never blocks the delete request.
     try {
@@ -1076,7 +1104,6 @@ const deleteBlog = async (req, res) => {
       if (localFiles.length > 0) {
         setImmediate(() => {
           try {
-            const fs = require('fs');
             for (const p of localFiles) {
               try {
                 const filePath = path.join(__dirname, '..', p);
@@ -1180,9 +1207,20 @@ const addCommentById = async (req, res) => {
       createdAt: new Date()
     };
 
-    // If avatar uploaded, set path
-    if (req.file && req.file.filename) {
-      newComment.avatar = `/uploads/comment-avatars/${req.file.filename}`;
+    // If an avatar was uploaded, store it durably and save the absolute URL.
+    // An avatar is optional, so a storage failure must not sink the comment.
+    if (req.file && req.file.buffer) {
+      try {
+        const stored = await storeImage(req.file.buffer, {
+          originalName: req.file.originalname,
+          mimeType: req.file.mimetype,
+          folder: 'comment-avatars'
+        });
+        newComment.avatar = stored.url;
+        newComment.avatarFileId = stored.fileId;
+      } catch (err) {
+        console.warn('Comment avatar upload failed:', err && err.message ? err.message : err);
+      }
     }
 
     const blog = await Blog.findByIdAndUpdate(
@@ -1298,47 +1336,112 @@ const editCommentById = async (req, res) => {
   }
 };
 
-// Migrate embedded base64 featured images to /uploads files (admin-only).
-// Old saves stored multi-MB data URLs in Mongo; each migrated post shrinks
-// list/detail payloads by megabytes. Original value is kept on any failure.
-const migrateEmbeddedImages = async (req, res) => {
+// Move stored image references into MongoDB-backed storage (admin-only).
+//
+// Handles both legacy shapes:
+//   - data:image/*;base64,...  multi-MB blobs embedded directly in Mongo
+//   - /uploads/...             paths to files on the app server's local disk
+//
+// References that already point at stored assets are left untouched. Local
+// paths whose file no longer exists are reported under `missing` so an admin
+// can see exactly which images need re-uploading. A stored value is only
+// overwritten after its replacement has been saved successfully.
+const migrateImages = async (req, res) => {
   try {
-    const crypto = require('crypto');
-    const fs = require('fs');
-    const blogs = await Blog.find({ image: /^data:image\// }).select('_id title image');
+    const blogs = await Blog.find({
+      $or: [
+        { image: /^data:image\// },
+        { image: /^\/uploads\// },
+        { 'comments.avatar': /^\/uploads\// }
+      ]
+    }).select('_id image comments');
+
     let migrated = 0;
     let skipped = 0;
-    const errors = [];
+    let missing = 0;
+    const failed = [];
+
+    // Upload a local file (by path) and return its new absolute URL.
+    const storeLocalFile = async (filePath, folder) => {
+      const buffer = fs.readFileSync(filePath);
+      const stored = await storeImage(buffer, {
+        originalName: filePath,
+        folder
+      });
+      return stored.url;
+    };
+
     for (const blog of blogs) {
-      try {
-        const match = String(blog.image).match(/^data:(image\/(png|jpe?g|gif|webp));base64,([A-Za-z0-9+/=]+)$/);
-        if (!match) {
+      // --- Featured image ---------------------------------------------------
+      const image = blog.image;
+      if (isDataImageUrl(image)) {
+        const decoded = decodeDataImageUrl(image);
+        if (!decoded) {
           skipped++;
-          continue;
+        } else {
+          try {
+            const stored = await storeImage(decoded.buffer, {
+              mimeType: decoded.mimeType,
+              folder: 'blog-images'
+            });
+            await Blog.updateOne(
+              { _id: blog._id },
+              { $set: { image: stored.url, imageFileId: stored.fileId } }
+            );
+            migrated++;
+          } catch (e) {
+            failed.push(String(blog._id));
+          }
         }
-        const ext = match[2] === 'jpeg' ? 'jpg' : match[2];
-        const buffer = Buffer.from(match[3], 'base64');
-        // Sanity: 50KB–15MB; tiny icons stay inline, huge files stay untouched.
-        if (buffer.length < 50 * 1024 || buffer.length > 15 * 1024 * 1024) {
-          skipped++;
-          continue;
+      } else if (isLocalUploadPath(image)) {
+        const localPath = localPathForUploadUrl(image);
+        if (!localPath || !fs.existsSync(localPath)) {
+          // The file was already lost with the old ephemeral disk.
+          missing++;
+        } else {
+          try {
+            const url = await storeLocalFile(localPath, 'blog-images');
+            await Blog.updateOne({ _id: blog._id }, { $set: { image: url } });
+            migrated++;
+          } catch (e) {
+            failed.push(String(blog._id));
+          }
         }
-        const filename = `migrated-${String(blog._id)}-${crypto.randomBytes(4).toString('hex')}.${ext}`;
-        const dir = path.join(__dirname, '..', 'uploads', 'blog-images');
-        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-        fs.writeFileSync(path.join(dir, filename), buffer);
-        await Blog.findByIdAndUpdate(blog._id, { image: `/uploads/blog-images/${filename}` });
-        migrated++;
-      } catch (e) {
-        errors.push(String(blog._id));
+      } else if (!isStoredImageUrl(image)) {
+        skipped++;
       }
-      if (migrated + skipped + errors.length >= 200) break;
+
+      // --- Comment avatars --------------------------------------------------
+      if (Array.isArray(blog.comments)) {
+        for (const comment of blog.comments) {
+          const avatar = comment && comment.avatar;
+          if (!avatar || !isLocalUploadPath(avatar)) continue;
+          const localPath = localPathForUploadUrl(avatar);
+          if (!localPath || !fs.existsSync(localPath)) {
+            missing++;
+            continue;
+          }
+          try {
+            const url = await storeLocalFile(localPath, 'comment-avatars');
+            await Blog.updateOne(
+              { _id: blog._id, 'comments._id': comment._id },
+              { $set: { 'comments.$.avatar': url } }
+            );
+            migrated++;
+          } catch (e) {
+            failed.push(`${blog._id}:${comment._id}`);
+          }
+        }
+      }
+
+      if (migrated + skipped + missing + failed.length >= 500) break;
     }
-    res.json({ success: true, data: { scanned: blogs.length, migrated, skipped, failed: errors } });
+
+    res.json({ success: true, data: { scanned: blogs.length, migrated, skipped, missing, failed } });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Error migrating embedded images',
+      message: 'Error migrating images',
       error: errDetail(error)
     });
   }
@@ -1605,7 +1708,7 @@ module.exports = {
   likeBlog,
   getBlogStats,
   fixPlaceholderImages,
-  migrateEmbeddedImages,
+  migrateImages,
   upload,
   commentAvatarUpload,
   getCommentsBySlug,
