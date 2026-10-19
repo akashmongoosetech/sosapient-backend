@@ -29,7 +29,9 @@ function careerVisitorEmail(career) {
     ),
     sectionLabel('Your application'),
     details,
-    paragraph('Our team will review your profile and contact you if your experience matches what we are looking for.'),
+    paragraph('Our team will review your profile and contact you if your experience matches what we are looking for.', {
+      margin: '18px 0 16px'
+    }),
     paragraph('If you have any questions in the meantime, just reply to this email.', { size: 14, color: BRAND.muted }),
     button('Visit our website', COMPANY.website)
   ].join('');
@@ -56,7 +58,7 @@ function careerVisitorEmail(career) {
   ].join('\n');
 
   return {
-    subject: `Thank you for your application - ${COMPANY.name}`,
+    subject: `Thank You for Your Application — ${COMPANY.name}`,
     toName: name,
     html: renderLayout({
       docTitle: `Thank you for applying to ${COMPANY.name}`,

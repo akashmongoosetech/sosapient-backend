@@ -30,7 +30,11 @@ function contactVisitorEmail(contact) {
     paragraph('Our team will review your inquiry and get back to you as appropriate.'),
     sectionLabel('What happens next'),
     panel(steps(STEPS)),
-    paragraph(escapeHtml(COMPANY.responseTime), { size: 14, color: BRAND.muted }),
+    paragraph(escapeHtml(COMPANY.responseTime), {
+      size: 14,
+      color: BRAND.muted,
+      margin: '18px 0 16px'
+    }),
     button('Visit our website', COMPANY.website),
     paragraph('Need to add something? Just reply to this email.', { size: 14, color: BRAND.muted, margin: '0' })
   ].join('');

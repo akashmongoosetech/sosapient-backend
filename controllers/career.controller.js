@@ -54,9 +54,13 @@ const createCareer = async (req, res) => {
       delivery: summarise(delivery)
     });
   } catch (error) {
-    res.status(400).json({
+    // A validation failure is the caller's fault; anything else (a dropped
+    // connection, a storage error) is ours. Reporting both as 400 told clients
+    // to fix their input when retrying was the right move.
+    const invalid = error && error.name === 'ValidationError';
+    res.status(invalid ? 400 : 500).json({
       success: false,
-      message: errMsg(error, 'Error creating career application')
+      message: invalid ? 'Please check the form and try again.' : errMsg(error, 'Error creating career application')
     });
   }
 };
