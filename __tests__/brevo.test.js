@@ -58,6 +58,12 @@ test('isBrevoConfigured needs both an API key and a usable sender address', () =
   assert.equal(isBrevoConfigured(), false);
 });
 
+test('isBrevoConfigured can judge a flow-specific sender', () => {
+  assert.equal(isBrevoConfigured({ email: 'hrd@sosapient.in' }), true);
+  assert.equal(isBrevoConfigured({ email: '' }), false);
+  assert.equal(isBrevoConfigured({ email: 'not-an-address' }), false);
+});
+
 test('apiKeyProblem reports missing, smtp-key, or nothing', () => {
   delete process.env.BREVO_API_KEY;
   assert.equal(apiKeyProblem(), 'missing');
@@ -146,6 +152,38 @@ test('sendTransactionalEmail posts the message to Brevo and returns its id', asy
   assert.equal(payload.subject, 'Hello there');
   assert.equal(payload.htmlContent, '<p>Hi</p>');
   assert.equal(payload.textContent, 'Hi');
+});
+
+test('a message can carry its own sender without changing the default', async () => {
+  const bodies = [];
+  global.fetch = async (url, init) => {
+    bodies.push(JSON.parse(init.body));
+    return jsonResponse(201, { messageId: 'x' });
+  };
+
+  await sendTransactionalEmail({ ...MESSAGE, sender: { email: 'hrd@sosapient.in' } });
+  await sendTransactionalEmail(MESSAGE);
+
+  assert.deepEqual(bodies[0].sender, { email: 'hrd@sosapient.in', name: 'SoSapient' });
+  assert.deepEqual(bodies[1].sender, { email: 'admin@sosapient.in', name: 'SoSapient' });
+});
+
+test('an unusable per-message sender fails before the network is touched', async () => {
+  let called = false;
+  global.fetch = async () => {
+    called = true;
+    return jsonResponse(201, {});
+  };
+
+  for (const sender of [{ email: '' }, { email: 'not-an-address' }]) {
+    await assert.rejects(
+      () => sendTransactionalEmail({ ...MESSAGE, sender }),
+      (err) =>
+        err instanceof EmailConfigError && err.status === 503 && err.code === 'sender-not-configured'
+    );
+  }
+
+  assert.equal(called, false, 'a broken sender must not spend a round trip');
 });
 
 test('sendTransactionalEmail sets reply-to only from an already-valid address', async () => {

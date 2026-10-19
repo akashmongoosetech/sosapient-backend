@@ -22,7 +22,12 @@ expose it to the frontend.
 ## Step 2 — Add and authenticate the sender
 
 1. Go to **Senders, Domains & Dedicated IPs** (<https://app.brevo.com/senders>).
-2. Add `admin@sosapient.in` as a sender and complete the verification email.
+2. Add **both** addresses as senders and complete the verification email for each:
+   - `admin@sosapient.in` — contact-form mail.
+   - `hrd@sosapient.in` — job-application mail.
+
+   Each verification email goes to that mailbox, so both addresses must exist and
+   be readable. Brevo rejects an unverified sender with `sender-not-valid`.
 3. Add `sosapient.in` as a **domain** and open its authentication page.
 
 Brevo displays the exact records to add. **Copy the values from the dashboard —
@@ -66,14 +71,20 @@ See `.env.example` for the authoritative list.
 
 ```env
 BREVO_API_KEY=...                 # from Step 1
-BREVO_SENDER_EMAIL=admin@sosapient.in
+BREVO_SENDER_EMAIL=admin@sosapient.in    # contact-form sender
 BREVO_SENDER_NAME=SoSapient
-CONTACT_ADMIN_EMAIL=admin@sosapient.in   # notification recipient, server-side only
+CAREER_SENDER_EMAIL=hrd@sosapient.in     # job-application sender
+CAREER_ADMIN_EMAIL=hrd@sosapient.in      # job-application notification recipient
+CONTACT_ADMIN_EMAIL=admin@sosapient.in   # contact notification recipient
 BREVO_TIMEOUT_MS=10000            # optional, per-attempt timeout
 ```
 
-`ADMIN_EMAIL` is still used for admin sign-in and is the fallback notification
-recipient when `CONTACT_ADMIN_EMAIL` is unset.
+Contact mail is sent from, and its notification delivered to, `admin@`. Career
+mail uses `hrd@` for both. If the two `CAREER_*` variables are unset, the career
+flow falls back to the contact values, so mail still sends — just from `admin@`.
+
+`ADMIN_EMAIL` is still used for admin sign-in and is the last-resort notification
+recipient when neither flow-specific address is set.
 
 If `BREVO_API_KEY` or `BREVO_SENDER_EMAIL` is missing, the server logs a single
 startup warning and **skips sending entirely**. The form still succeeds — the
@@ -87,7 +98,8 @@ enquiry is saved — so check the logs if notifications stop arriving.
    `emailDelivery` record shows `visitor: sent` and `admin: sent`.
 4. Confirm the visitor confirmation arrives, and that the admin notification
    arrives at `admin@sosapient.in` (reply-to is set to the visitor).
-5. Make a test job application and confirm both messages again.
+5. Make a test job application and confirm the applicant confirmation comes from
+   `hrd@sosapient.in` and that the recruiter notice arrives there.
 
 ---
 
@@ -115,9 +127,12 @@ enquiry is saved — so check the logs if notifications stop arriving.
 | Symptom | Likely cause |
 | --- | --- |
 | No email at all, form still works | `BREVO_API_KEY` or `BREVO_SENDER_EMAIL` missing in the host environment |
-| `delivery.admin = failed`, code `invalid-recipient` | `CONTACT_ADMIN_EMAIL` is not a valid address |
+| `delivery.admin = failed`, code `invalid-recipient` | `CONTACT_ADMIN_EMAIL` or `CAREER_ADMIN_EMAIL` is not a valid address |
 | `delivery.* = failed`, code `smtp-key-not-api-key` | `BREVO_API_KEY` is an SMTP key (`xsmtpsib-`). Generate a v3 API key on the **API Keys** tab, not the **SMTP** tab |
-| `delivery.* = failed`, code `http-401` | API key revoked, wrong, or lacking permission |
+| `delivery.* = failed`, code `sender-not-configured` | `CAREER_SENDER_EMAIL` (or `BREVO_SENDER_EMAIL`) is missing or malformed |
+| `delivery.* = failed`, code `sender-not-valid` | That From address is not a verified sender in Brevo — add it at <https://app.brevo.com/senders> |
+| `delivery.* = failed`, code `unauthorized`, message mentions an *unrecognised IP address* | Brevo's **Authorised IPs** restriction is on. Clear it at <https://app.brevo.com/security/authorised_ips>; allowlisting is useless for Render because its egress IPs change |
+| `delivery.* = failed`, code `http-401` / `unauthorized` otherwise | API key revoked, wrong, or lacking permission |
 | `delivery.* = failed`, code `not-configured` | Brevo env vars not set (see above) |
 | Sends fine but lands in spam | SPF/DKIM not yet authenticated, or the sender is unverified |
 | Messages sent but never arrive | Check the Brevo dashboard for bounces and blocklist entries |

@@ -17,11 +17,42 @@ const STATUS_FAILED = 'failed';
 const STATUS_SKIPPED = 'skipped';
 const NO_RECIPIENT = 'no-admin-recipient';
 
+const DEFAULT_SENDER_NAME = 'SoSapient';
+
+function defaultSender() {
+  return {
+    email: String(process.env.BREVO_SENDER_EMAIL || '').trim(),
+    name: String(process.env.BREVO_SENDER_NAME || '').trim() || DEFAULT_SENDER_NAME
+  };
+}
+
+// Contact mail uses the long-standing shared sender.
+function contactSender() {
+  return defaultSender();
+}
+
+// Career mail can come from a separate mailbox (usually hrd@) so a candidate's
+// reply reaches the people who hire. Unset, it falls back rather than failing,
+// which keeps an un-updated deployment working.
+function careerSender() {
+  const sender = defaultSender();
+  const configured = String(process.env.CAREER_SENDER_EMAIL || '').trim();
+  return configured ? { ...sender, email: configured } : sender;
+}
+
 // Fixed, server-configured recipient. The client can never influence this.
-// CONTACT_ADMIN_EMAIL wins; ADMIN_EMAIL is the long-standing shared value.
-function resolveAdminRecipient() {
-  const configured = String(process.env.CONTACT_ADMIN_EMAIL || '').trim();
+// Contact: CONTACT_ADMIN_EMAIL, then ADMIN_EMAIL.
+// Career:  CAREER_ADMIN_EMAIL, then CONTACT_ADMIN_EMAIL, then ADMIN_EMAIL.
+function resolveAdminRecipient(flow = 'contact') {
+  const specific = flow === 'career' ? 'CAREER_ADMIN_EMAIL' : 'CONTACT_ADMIN_EMAIL';
+  const configured = String(process.env[specific] || '').trim();
   if (configured) return configured;
+
+  if (flow === 'career') {
+    const shared = String(process.env.CONTACT_ADMIN_EMAIL || '').trim();
+    if (shared) return shared;
+  }
+
   return String(process.env.ADMIN_EMAIL || '').trim();
 }
 
@@ -46,14 +77,15 @@ async function attempt(label, message) {
   }
 }
 
-function buildMessage(template, to, replyTo) {
+function buildMessage(template, to, replyTo, sender) {
   return {
     to,
     toName: template.toName,
     subject: template.subject,
     html: template.html,
     text: template.text,
-    replyTo
+    replyTo,
+    sender
   };
 }
 
@@ -109,7 +141,8 @@ async function sendContactEmails(contact, options = {}) {
   const notifyVisitor = options.notifyVisitor !== false;
   warnIfMisconfigured();
 
-  const adminTo = resolveAdminRecipient();
+  const sender = contactSender();
+  const adminTo = resolveAdminRecipient('contact');
   if (!adminTo) console.error('[email] CONTACT_ADMIN_EMAIL is not set; admin notification cannot be sent');
 
   // The administrator can reply straight to the visitor.
@@ -117,10 +150,21 @@ async function sendContactEmails(contact, options = {}) {
 
   const [adminResult, visitorResult] = await Promise.all([
     adminTo
-      ? attempt('contact-admin', buildMessage(templates.contactAdminEmail(contact), adminTo, adminReplyTo))
+      ? attempt(
+          'contact-admin',
+          buildMessage(
+            templates.contactAdminEmail(contact, { mailbox: sender.email }),
+            adminTo,
+            adminReplyTo,
+            sender
+          )
+        )
       : missingRecipient(),
     notifyVisitor
-      ? attempt('contact-visitor', buildMessage(templates.contactVisitorEmail(contact), contact.email))
+      ? attempt(
+          'contact-visitor',
+          buildMessage(templates.contactVisitorEmail(contact), contact.email, '', sender)
+        )
       : Promise.resolve({ status: STATUS_SKIPPED, at: new Date() })
   ]);
 
@@ -137,16 +181,28 @@ async function sendContactEmails(contact, options = {}) {
 async function sendCareerEmails(career) {
   warnIfMisconfigured();
 
-  const adminTo = resolveAdminRecipient();
-  if (!adminTo) console.error('[email] CONTACT_ADMIN_EMAIL is not set; admin notification cannot be sent');
+  const sender = careerSender();
+  const adminTo = resolveAdminRecipient('career');
+  if (!adminTo) console.error('[email] CAREER_ADMIN_EMAIL is not set; career notification cannot be sent');
 
   const adminReplyTo = String(career.email || '').trim();
 
   const [adminResult, visitorResult] = await Promise.all([
     adminTo
-      ? attempt('career-admin', buildMessage(templates.careerAdminEmail(career), adminTo, adminReplyTo))
+      ? attempt(
+          'career-admin',
+          buildMessage(
+            templates.careerAdminEmail(career, { mailbox: sender.email }),
+            adminTo,
+            adminReplyTo,
+            sender
+          )
+        )
       : missingRecipient(),
-    attempt('career-visitor', buildMessage(templates.careerVisitorEmail(career), career.email))
+    attempt(
+      'career-visitor',
+      buildMessage(templates.careerVisitorEmail(career), career.email, '', sender)
+    )
   ]);
 
   return { admin: adminResult, visitor: visitorResult };

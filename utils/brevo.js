@@ -45,10 +45,20 @@ class EmailSendError extends Error {
   }
 }
 
-function senderConfig() {
-  const email = String(process.env.BREVO_SENDER_EMAIL || '').trim();
-  const name = String(process.env.BREVO_SENDER_NAME || '').trim() || 'SoSapient';
-  return { email, name };
+// The default sender, plus an optional per-message override. A flow with its own
+// mailbox (career mail comes from hrd@) passes { email } and that address is used
+// exactly as given: falling back to the default here would silently send the
+// message from the wrong mailbox, which is worse than failing loudly.
+function senderConfig(override) {
+  const defaultEmail = String(process.env.BREVO_SENDER_EMAIL || '').trim();
+  const defaultName = String(process.env.BREVO_SENDER_NAME || '').trim() || 'SoSapient';
+
+  if (!override) return { email: defaultEmail, name: defaultName };
+
+  return {
+    email: String(override.email || '').trim(),
+    name: String(override.name || '').trim() || defaultName
+  };
 }
 
 // Returns '' when the key looks usable, otherwise the reason it does not.
@@ -61,8 +71,8 @@ function apiKeyProblem() {
   return '';
 }
 
-function isBrevoConfigured() {
-  return apiKeyProblem() === '' && EMAIL_PATTERN.test(senderConfig().email);
+function isBrevoConfigured(sender) {
+  return apiKeyProblem() === '' && EMAIL_PATTERN.test(senderConfig(sender).email);
 }
 
 // Configuration guidance is emitted once, never per request, and never contains
@@ -168,20 +178,36 @@ async function postOnce(payload, apiKey) {
  * Send one transactional email through Brevo.
  *
  * @param {{ to: string, toName?: string, subject: string, html: string,
- *           text?: string, replyTo?: string }} message
+ *           text?: string, replyTo?: string,
+ *           sender?: { email: string, name?: string } }} message
+ *        `sender` overrides BREVO_SENDER_EMAIL for this one message; it is used
+ *        verbatim and never falls back, so a misconfigured flow fails visibly.
  * @returns {Promise<{ messageId: string }>}
- * @throws {EmailConfigError} when Brevo is not configured.
+ * @throws {EmailConfigError} when Brevo or the sender is not configured.
  * @throws {EmailSendError} when Brevo rejects the message or all retries fail.
  */
 async function sendTransactionalEmail(message) {
-  if (!isBrevoConfigured()) {
+  const apiKey = String(process.env.BREVO_API_KEY || '').trim();
+  const sender = senderConfig(message && message.sender);
+  const problem = apiKeyProblem();
+
+  if (problem !== '') {
     warnIfMisconfigured();
-    const problem = apiKeyProblem();
     throw new EmailConfigError(
       problem === 'smtp-key'
         ? 'BREVO_API_KEY is an SMTP key, not a v3 API key'
         : 'Transactional email is not configured',
       problem === 'smtp-key' ? 'smtp-key-not-api-key' : 'not-configured'
+    );
+  }
+
+  // A flow-specific address that is missing or malformed cannot be fixed by
+  // retrying, and Brevo rejects it as an invalid sender anyway. Name it here so
+  // the delivery record says which mailbox is misconfigured.
+  if (!EMAIL_PATTERN.test(sender.email)) {
+    throw new EmailConfigError(
+      'The sender address for this message is not configured',
+      'sender-not-configured'
     );
   }
 
@@ -194,10 +220,8 @@ async function sendTransactionalEmail(message) {
     });
   }
 
-  const { email: senderEmail, name: senderName } = senderConfig();
-
   const payload = {
-    sender: { email: senderEmail, name: senderName },
+    sender: { email: sender.email, name: sender.name },
     to: [message.toName ? { email: to, name: String(message.toName) } : { email: to }],
     subject: String(message.subject || '').slice(0, 200),
     htmlContent: String(message.html || '')
@@ -207,8 +231,6 @@ async function sendTransactionalEmail(message) {
   // Reply-to is only ever set from an address we already validated server-side.
   const replyTo = String(message.replyTo || '').trim();
   if (EMAIL_PATTERN.test(replyTo)) payload.replyTo = { email: replyTo };
-
-  const apiKey = String(process.env.BREVO_API_KEY).trim();
 
   let last = null;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {

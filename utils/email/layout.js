@@ -58,10 +58,11 @@ function signature({ closing, name }) {
   </table>`;
 }
 
-function footerCell(showMailbox) {
-  const mailbox = showMailbox
-    ? `<a href="mailto:${escapeHtml(COMPANY.email)}" style="color:${BRAND.primaryDark};text-decoration:none;">${escapeHtml(
-        COMPANY.email
+function footerCell(showMailbox, mailbox) {
+  const address = String(mailbox || '').trim() || COMPANY.email;
+  const mailboxLine = showMailbox
+    ? `<a href="mailto:${escapeHtml(address)}" style="color:${BRAND.primaryDark};text-decoration:none;">${escapeHtml(
+        address
       )}</a><br />`
     : '';
   return `<tr>
@@ -73,7 +74,7 @@ function footerCell(showMailbox) {
         <a href="${escapeHtml(COMPANY.website)}" style="color:${BRAND.primaryDark};text-decoration:none;">${escapeHtml(
     COMPANY.website.replace(/^https?:\/\//, '')
   )}</a><br />
-        ${mailbox}${escapeHtml(COMPANY.phone)}<br />
+        ${mailboxLine}${escapeHtml(COMPANY.phone)}<br />
         ${escapeHtml(COMPANY.address)}
       </p>
       <p style="margin:0;font-family:${FONT};font-size:11px;line-height:1.7;color:${BRAND.footerText};">
@@ -93,10 +94,11 @@ function renderLayout({
   introHtml = '',
   bodyHtml = '',
   signature: signatureOptions = { closing: 'Warm regards,', name: `The ${COMPANY.name} Team` },
-  showMailbox = true
+  showMailbox = true,
+  mailbox = COMPANY.email
 } = {}) {
   const social = socialChips();
-  const footer = footerCell(showMailbox);
+  const footer = footerCell(showMailbox, mailbox);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -198,9 +200,9 @@ function renderLayout({
 // Every message ships a text alternative. These helpers keep the contact block
 // and the social list identical across the four templates.
 
-function textContactLines(showMailbox) {
+function textContactLines(showMailbox, mailbox) {
   const lines = [COMPANY.name, COMPANY.website];
-  if (showMailbox) lines.push(COMPANY.email);
+  if (showMailbox) lines.push(String(mailbox || '').trim() || COMPANY.email);
   lines.push(COMPANY.phone, COMPANY.address);
   return lines;
 }

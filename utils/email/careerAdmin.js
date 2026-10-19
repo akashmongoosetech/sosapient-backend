@@ -20,7 +20,10 @@ const {
 } = require('./primitives');
 const { renderLayout, textContactLines, textSocialLines } = require('./layout');
 
-function careerAdminEmail(career) {
+function careerAdminEmail(career, options = {}) {
+  // The recruiter mailbox shown in the footer belongs to the career flow, not
+  // the general contact address. emailService passes the configured sender.
+  const mailbox = String(options.mailbox || '').trim();
   const source = career || {};
   const name = toText(source.name);
   const email = toText(source.email);
@@ -83,7 +86,7 @@ function careerAdminEmail(career) {
     'Regards,',
     `The ${COMPANY.name} Team`,
     '',
-    ...textContactLines(true),
+    ...textContactLines(true, mailbox),
     '',
     'Follow us',
     ...textSocialLines()
@@ -101,7 +104,8 @@ function careerAdminEmail(career) {
       bannerText: 'A candidate has applied through the careers page.',
       bodyHtml,
       signature: { closing: 'Regards,', name: `The ${COMPANY.name} Team` },
-      showMailbox: true
+      showMailbox: true,
+      mailbox
     }),
     text
   };

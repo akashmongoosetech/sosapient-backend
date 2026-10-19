@@ -25,7 +25,10 @@ const {
 } = require('./primitives');
 const { renderLayout, textContactLines, textSocialLines } = require('./layout');
 
-function contactAdminEmail(contact) {
+function contactAdminEmail(contact, options = {}) {
+  // The footer mailbox follows the configured contact sender, so it never
+  // advertises an address the message was not actually sent from.
+  const mailbox = String(options.mailbox || '').trim();
   const source = contact || {};
   const name = toText(source.name);
   const email = toText(source.email);
@@ -79,7 +82,7 @@ function contactAdminEmail(contact) {
     'Regards,',
     `The ${COMPANY.name} Team`,
     '',
-    ...textContactLines(true),
+    ...textContactLines(true, mailbox),
     '',
     'Follow us',
     ...textSocialLines()
@@ -95,7 +98,8 @@ function contactAdminEmail(contact) {
       bannerText: 'A new visitor has submitted the contact form on the website.',
       bodyHtml,
       signature: { closing: 'Regards,', name: `The ${COMPANY.name} Team` },
-      showMailbox: true
+      showMailbox: true,
+      mailbox
     }),
     text
   };
