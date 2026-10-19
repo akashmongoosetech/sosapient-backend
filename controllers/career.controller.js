@@ -1,5 +1,5 @@
 const Career = require('../models/career.model');
-const { sendCareerEmail } = require('../utils/emailService');
+const { sendCareerEmails, summarise, persistDelivery } = require('../utils/emailService');
 const { isHoneypotFilled } = require('../utils/honeypot');
 
 function errMsg(error, fallback) {
@@ -15,6 +15,9 @@ function pickCareer(body = {}) {
 }
 function stripResume(doc) {
   const obj = doc.toObject();
+  // Delivery provider codes are operational detail and stay server-side; the
+  // caller receives the status summary in `delivery` instead.
+  delete obj.emailDelivery;
   return { ...obj, resume: obj.resume ? { filename: obj.resume.filename, contentType: obj.resume.contentType } : undefined };
 }
 
@@ -40,17 +43,15 @@ const createCareer = async (req, res) => {
 
     const career = await Career.create(careerData);
 
-    // Send email notification
-    try {
-      await sendCareerEmail(career);
-    } catch (emailError) {
-      console.error('Error sending career email notification');
-      // Don't fail the request if email fails
-    }
+    // The application is stored. Email is best-effort: a delivery problem must
+    // never undo the saved application or be reported as a submission failure.
+    const delivery = await sendCareerEmails(career);
+    await persistDelivery(career, delivery);
 
     res.status(201).json({
       success: true,
-      data: stripResume(career)
+      data: stripResume(career),
+      delivery: summarise(delivery)
     });
   } catch (error) {
     res.status(400).json({

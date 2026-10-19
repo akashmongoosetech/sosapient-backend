@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { emailDeliverySchema } = require('./emailDelivery.schema');
 
 const contactSchema = new mongoose.Schema({
   name: {
@@ -51,6 +52,10 @@ const contactSchema = new mongoose.Schema({
     trim: true,
     maxlength: [40, 'Source must be at most 40 characters'],
     default: 'general'
+  },
+  emailDelivery: {
+    type: emailDeliverySchema,
+    default: () => ({})
   }
 }, {
   timestamps: true

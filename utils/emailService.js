@@ -1,185 +1,155 @@
-const nodemailer = require("nodemailer");
+// Email orchestration: turns a stored inquiry or application into the messages
+// that get sent through Brevo.
+//
+// Delivery rules that matter:
+//   - The two messages are independent. One failing must never block, retry or
+//     duplicate the other.
+//   - A send is only reported as "sent" once Brevo has accepted it. Acceptance
+//     is still not inbox placement — see utils/brevo.js.
+//   - Provider errors are reduced to a short code. Raw provider text and
+//     message bodies never reach the logs or the client.
 
-// Create reusable transporter
-const createTransporter = () => {
-  return nodemailer.createTransport({
-    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-    port: parseInt(process.env.EMAIL_PORT, 10) || 587,
-    secure: false, // true for 465, false for other ports
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
-    },
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 15000,
-  });
-};
+const { sendTransactionalEmail, EmailConfigError, warnIfNotConfigured } = require('./brevo');
+const templates = require('./emailTemplates');
 
-function withTimeout(promise, ms = 15000, label = 'Email send timed out') {
-  let t;
-  const timeout = new Promise((_, reject) => {
-    t = setTimeout(() => reject(new Error(label)), ms);
-    if (t.unref) t.unref();
-  });
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(t));
+const STATUS_SENT = 'sent';
+const STATUS_FAILED = 'failed';
+const STATUS_SKIPPED = 'skipped';
+const NO_RECIPIENT = 'no-admin-recipient';
+
+// Fixed, server-configured recipient. The client can never influence this.
+// CONTACT_ADMIN_EMAIL wins; ADMIN_EMAIL is the long-standing shared value.
+function resolveAdminRecipient() {
+  const configured = String(process.env.CONTACT_ADMIN_EMAIL || '').trim();
+  if (configured) return configured;
+  return String(process.env.ADMIN_EMAIL || '').trim();
 }
 
-const transporter = createTransporter();
-
-function escapeHtml(value) {
-  return String(value == null ? '' : value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+function failureCode(error) {
+  if (error instanceof EmailConfigError) return error.code || 'not-configured';
+  return (error && error.code) || 'send-failed';
 }
 
-// Send contact form email
-const sendContactEmail = async (contactData) => {
-  // Check if email configuration is available
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    throw new Error('Email configuration is missing. Please set EMAIL_USER and EMAIL_PASS environment variables.');
+// One message, one attempt-set. Never throws: the caller needs the outcome of
+// each message independently.
+async function attempt(message) {
+  try {
+    const { messageId } = await sendTransactionalEmail(message);
+    return { status: STATUS_SENT, messageId: messageId || '', at: new Date() };
+  } catch (error) {
+    const code = failureCode(error);
+    // Log the code only — never the provider's raw response or the email body.
+    console.error(`[email] send failed (${code})`);
+    return { status: STATUS_FAILED, code, at: new Date() };
   }
+}
 
-  const mailOptions = {
-    from: `"SoSapient Contact" <${process.env.EMAIL_USER}>`,
-    to: process.env.ADMIN_EMAIL || process.env.EMAIL_USER,
-    subject: `New Contact Form Submission: ${String(contactData.subject || '').slice(0, 120)}`,
-    html: `
-      <h2>New Contact Form Submission</h2>
-      <p><strong>Name:</strong> ${escapeHtml(contactData.name)}</p>
-      <p><strong>Email:</strong> ${escapeHtml(contactData.email)}</p>
-      <p><strong>Company:</strong> ${escapeHtml(contactData.company || "N/A")}</p>
-      <p><strong>Phone:</strong> ${escapeHtml(contactData.phone || "N/A")}</p>
-      <p><strong>Subject:</strong> ${escapeHtml(contactData.subject)}</p>
-      <p><strong>Message:</strong> ${escapeHtml(contactData.message)}</p>
-      <p><strong>Budget:</strong> ${escapeHtml(contactData.budget || "N/A")}</p>
-      <p><strong>Timeline:</strong> ${escapeHtml(contactData.timeline || "N/A")}</p>
-    `,
-    text: `New contact from ${contactData.name} <${contactData.email}>: ${contactData.subject}\n${contactData.message}`,
+function buildMessage(template, to, replyTo) {
+  return {
+    to,
+    toName: template.toName,
+    subject: template.subject,
+    html: template.html,
+    text: template.text,
+    replyTo
   };
+}
 
+function missingRecipient() {
+  return Promise.resolve({ status: STATUS_FAILED, code: NO_RECIPIENT, at: new Date() });
+}
+
+function summarise(delivery) {
+  return {
+    visitor: delivery.visitor.status,
+    admin: delivery.admin.status
+  };
+}
+
+// Store only the schema fields — provider message ids are useful in logs but
+// are not persisted.
+function deliveryEntry(entry) {
+  return { status: entry.status, code: entry.code || '', at: entry.at || null };
+}
+
+/**
+ * Best-effort persistence of a delivery outcome onto the stored document.
+ * Bookkeeping must never fail the caller's request, so this never throws.
+ *
+ * @returns {Promise<boolean>} true when the status was saved.
+ */
+async function persistDelivery(doc, delivery) {
   try {
-    // Create fresh transporter for contact emails to avoid auth issues
-    const contactTransporter = createTransporter();
-    await withTimeout(contactTransporter.sendMail(mailOptions), 15000, 'Contact email timed out');
+    doc.emailDelivery = {
+      visitor: deliveryEntry(delivery.visitor),
+      admin: deliveryEntry(delivery.admin)
+    };
+    await doc.save();
     return true;
-  } catch (error) {
-    console.error("Error sending contact email");
-    throw error;
+  } catch {
+    console.error('[email] could not persist delivery status');
+    return false;
   }
-};
+}
 
-// Email template for applicant
-const getApplicantEmailTemplate = (career) => {
-  return `
-  <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f4; padding: 30px;">
-    <div style="max-width: 600px; margin: auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 0 10px rgba(0,0,0,0.05);">
-      
-      <!-- Header with Logo -->
-      <div style="background-color: #007BFF; padding: 20px; text-align: center;">
-        <img src="https://ik.imagekit.io/sentyaztie/Dicon.png?updatedAt=1750067621393" alt="SoSapient Logo" style="max-width: 150px;"/>
-      </div>
+/**
+ * Send the visitor confirmation and the administrator notification for a
+ * contact-form inquiry.
+ *
+ * The chatbot reuses this with `notifyVisitor: false` to keep its existing
+ * admin-only behaviour.
+ *
+ * @param {object} contact Stored Contact document.
+ * @param {{ notifyVisitor?: boolean }} [options]
+ * @returns {Promise<{visitor: object, admin: object}>}
+ */
+async function sendContactEmails(contact, options = {}) {
+  const notifyVisitor = options.notifyVisitor !== false;
+  warnIfNotConfigured();
 
-      <!-- Body -->
-      <div style="padding: 30px;">
-        <h2 style="color: #333;">Thank You for Applying to <span style="color: #007BFF;">SoSapient</span>!</h2>
-        <p style="font-size: 16px; color: #555;">Dear <strong>${escapeHtml(
-          career.name
-        )}</strong>,</p>
-        <p style="font-size: 15px; color: #555;">We have received your application for the <strong>${escapeHtml(
-          career.position
-        )}</strong> position. We're excited to review your profile!</p>
+  const adminTo = resolveAdminRecipient();
+  if (!adminTo) console.error('[email] CONTACT_ADMIN_EMAIL is not set; admin notification cannot be sent');
 
-        <h3 style="color: #007BFF;">Application Details:</h3>
-        <ul style="list-style: none; padding: 0; font-size: 15px; color: #444;">
-          <li><strong>Position:</strong> ${escapeHtml(career.position)}</li>
-          <li><strong>Email:</strong> ${escapeHtml(career.email)}</li>
-          <li><strong>Phone:</strong> ${escapeHtml(career.phone)}</li>
-        </ul>
+  // The administrator can reply straight to the visitor.
+  const adminReplyTo = String(contact.email || '').trim();
 
-        <p style="font-size: 15px; color: #555;">Our team will review your application and contact you soon.</p>
-        <p style="margin-top: 25px; font-size: 15px; color: #555; line-height: 1.6;">
-  <strong>Best regards,</strong><br>
-  Ritu Chouhan<br>
-  HR Head - Operations<br>
-  SoSapient
-</p>
-        <img src="https://ik.imagekit.io/sentyaztie/Dlogo.png?updatedAt=1749928182723" alt="SoSapient Logo" style="max-width: 150px;"/>
-      </div>
+  const [adminResult, visitorResult] = await Promise.all([
+    adminTo ? attempt(buildMessage(templates.contactAdminEmail(contact), adminTo, adminReplyTo)) : missingRecipient(),
+    notifyVisitor
+      ? attempt(buildMessage(templates.contactVisitorEmail(contact), contact.email))
+      : Promise.resolve({ status: STATUS_SKIPPED, at: new Date() })
+  ]);
 
-      <!-- Footer -->
-      <div style="background-color: #f0f0f0; padding: 20px; text-align: center;">
-        <p style="margin: 0 0 10px; color: #777; font-size: 13px;">Follow us on:</p>
-        <div style="margin-bottom: 10px;">
-          <a href="https://www.facebook.com/profile.php?id=61553017931533" style="margin: 0 10px;">
-            <img src="https://cdn-icons-png.flaticon.com/24/733/733547.png" alt="Facebook" style="vertical-align: middle;" />
-          </a>
-          <a href="https://x.com/SoSapient_tech" style="margin: 0 10px;">
-            <img src="https://cdn-icons-png.flaticon.com/24/733/733579.png" alt="Twitter" style="vertical-align: middle;" />
-          </a>
-          <a href="https://www.linkedin.com/company/100043699/admin/page-posts/published/" style="margin: 0 10px;">
-            <img src="https://cdn-icons-png.flaticon.com/24/733/733561.png" alt="LinkedIn" style="vertical-align: middle;" />
-          </a>
-          <a href="https://www.instagram.com/sosapient/" style="margin: 0 10px;">
-            <img src="https://cdn-icons-png.flaticon.com/24/733/733558.png" alt="Instagram" style="vertical-align: middle;" />
-          </a>
-        </div>
-        <p style="color: #999; font-size: 12px;">© ${new Date().getFullYear()} SoSapient. All rights reserved.<br/>
-        <a href="https://sosapient.in" style="color: #007BFF; text-decoration: none;">Visit our Website</a> |
-        <a href="mailto:career@sosapient.in" style="color: #007BFF; text-decoration: none;">career@sosapient.in</a></p>
-      </div>
-    </div>
-  </div>
-  `;
-};
+  return { admin: adminResult, visitor: visitorResult };
+}
 
-// Email template for admin
-const getAdminEmailTemplate = (career) => {
-  return `
-    <h2>New Job Application Received</h2>
-    <p>A new job application has been submitted:</p>
-    <ul>
-      <li>Name: ${escapeHtml(career.name)}</li>
-      <li>Position: ${escapeHtml(career.position)}</li>
-      <li>Email: ${escapeHtml(career.email)}</li>
-      <li>Phone: ${escapeHtml(career.phone)}</li>
-      <li>Experience: ${escapeHtml(career.experience)} years</li>
-      <li>Message: ${escapeHtml(career.message || "No message provided")}</li>
-    </ul>
-    <p>Please review the application in the admin dashboard.</p>
-  `;
-};
+/**
+ * Send the applicant confirmation and the administrator notification for a job
+ * application.
+ *
+ * @param {object} career Stored Career document.
+ * @returns {Promise<{visitor: object, admin: object}>}
+ */
+async function sendCareerEmails(career) {
+  warnIfNotConfigured();
 
-// Send emails to both applicant and admin
-const sendCareerEmail = async (career) => {
-  try {
-    // Sequential with per-mail timeout so an SMTP outage cannot hang the request
-    await withTimeout(transporter.sendMail({
-      from: `"SoSapient" <${process.env.EMAIL_USER}>`,
-      to: career.email,
-      subject: "Thank you for your job application - SoSapient",
-      html: getApplicantEmailTemplate(career),
-    }), 15000, 'Applicant email timed out');
+  const adminTo = resolveAdminRecipient();
+  if (!adminTo) console.error('[email] CONTACT_ADMIN_EMAIL is not set; admin notification cannot be sent');
 
-    // Send email to admin
-    await withTimeout(transporter.sendMail({
-      from: `"SoSapient" <${process.env.EMAIL_USER}>`,
-      to: process.env.ADMIN_EMAIL || process.env.EMAIL_USER,
-      subject: "New Job Application Received",
-      html: getAdminEmailTemplate(career),
-    }), 15000, 'Admin email timed out');
+  const adminReplyTo = String(career.email || '').trim();
 
-    return true;
-  } catch (error) {
-    console.error("Error sending career emails");
-    throw error;
-  }
-};
+  const [adminResult, visitorResult] = await Promise.all([
+    adminTo ? attempt(buildMessage(templates.careerAdminEmail(career), adminTo, adminReplyTo)) : missingRecipient(),
+    attempt(buildMessage(templates.careerVisitorEmail(career), career.email))
+  ]);
+
+  return { admin: adminResult, visitor: visitorResult };
+}
 
 module.exports = {
-  sendContactEmail,
-  sendCareerEmail,
+  resolveAdminRecipient,
+  summarise,
+  persistDelivery,
+  sendContactEmails,
+  sendCareerEmails
 };

@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 const Contact = require('../models/contact.model');
 const ChatSession = require('../models/ChatSession');
-const { sendContactEmail } = require('../utils/emailService');
+const { sendContactEmails, persistDelivery } = require('../utils/emailService');
 const { isHoneypotFilled } = require('../utils/honeypot');
 const chatbot = require('../services/chatbot.service');
 const intentSvc = require('../services/intent.service');
@@ -350,11 +350,10 @@ async function submitContact(req, res) {
     await contact.save();
     stats.leadSubmits += 1;
 
-    try {
-      await sendContactEmail(contact);
-    } catch (emailError) {
-      console.error('Chatbot lead email failed');
-    }
+    // Admin-only notification, matching the chatbot's existing behaviour: the
+    // chat already thanks the visitor, so no confirmation email is sent.
+    // Delivery status is recorded so a failure stays visible.
+    await persistDelivery(contact, await sendContactEmails(contact, { notifyVisitor: false }));
 
     return res.status(201).json({
       success: true,

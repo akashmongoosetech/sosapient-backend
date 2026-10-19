@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { emailDeliverySchema } = require('./emailDelivery.schema');
 
 const careerSchema = new mongoose.Schema({
   name: {
@@ -49,6 +50,10 @@ const careerSchema = new mongoose.Schema({
     type: String,
     enum: ['pending', 'reviewed', 'shortlisted', 'rejected'],
     default: 'pending'
+  },
+  emailDelivery: {
+    type: emailDeliverySchema,
+    default: () => ({})
   }
 }, {
   timestamps: true
