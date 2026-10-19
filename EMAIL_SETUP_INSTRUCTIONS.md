@@ -72,16 +72,18 @@ See `.env.example` for the authoritative list.
 ```env
 BREVO_API_KEY=...                 # from Step 1
 BREVO_SENDER_EMAIL=admin@sosapient.in    # contact-form sender
-BREVO_SENDER_NAME=SoSapient
+BREVO_SENDER_NAME=Akash Raikwar          # name recipients see
 CAREER_SENDER_EMAIL=hrd@sosapient.in     # job-application sender
+CAREER_SENDER_NAME=Ritu Chouhan          # name recipients see on career mail
 CAREER_ADMIN_EMAIL=hrd@sosapient.in      # job-application notification recipient
 CONTACT_ADMIN_EMAIL=admin@sosapient.in   # contact notification recipient
 BREVO_TIMEOUT_MS=10000            # optional, per-attempt timeout
 ```
 
-Contact mail is sent from, and its notification delivered to, `admin@`. Career
-mail uses `hrd@` for both. If the two `CAREER_*` variables are unset, the career
-flow falls back to the contact values, so mail still sends — just from `admin@`.
+Contact mail is sent from, and its notification delivered to, `admin@`, under
+Akash's name. Career mail uses `hrd@` for both, under the recruiter's name. If a
+`CAREER_*` variable is unset, the career flow falls back to the matching contact
+value, so mail still sends — just from `admin@` under Akash's name.
 
 `ADMIN_EMAIL` is still used for admin sign-in and is the last-resort notification
 recipient when neither flow-specific address is set.

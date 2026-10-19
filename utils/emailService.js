@@ -36,8 +36,10 @@ function contactSender() {
 // which keeps an un-updated deployment working.
 function careerSender() {
   const sender = defaultSender();
-  const configured = String(process.env.CAREER_SENDER_EMAIL || '').trim();
-  return configured ? { ...sender, email: configured } : sender;
+  return {
+    email: String(process.env.CAREER_SENDER_EMAIL || '').trim() || sender.email,
+    name: String(process.env.CAREER_SENDER_NAME || '').trim() || sender.name
+  };
 }
 
 // Fixed, server-configured recipient. The client can never influence this.

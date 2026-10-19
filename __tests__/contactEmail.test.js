@@ -6,7 +6,9 @@ const { sendContactEmails, sendCareerEmails, resolveAdminRecipient, summarise } 
 
 const ORIGINAL_FETCH = global.fetch;
 const ADMIN_EMAIL = 'admin@sosapient.in';
+const ADMIN_NAME = 'Akash Raikwar';
 const HR_EMAIL = 'hrd@sosapient.in';
+const HR_NAME = 'Ritu Chouhan';
 const VISITOR_EMAIL = 'asha@example.com';
 
 const CONTACT = {
@@ -37,7 +39,7 @@ const CAREER = {
 beforeEach(() => {
   process.env.BREVO_API_KEY = 'test-api-key';
   process.env.BREVO_SENDER_EMAIL = ADMIN_EMAIL;
-  process.env.BREVO_SENDER_NAME = 'SoSapient';
+  process.env.BREVO_SENDER_NAME = ADMIN_NAME;
   process.env.CONTACT_ADMIN_EMAIL = ADMIN_EMAIL;
 });
 
@@ -47,6 +49,7 @@ afterEach(() => {
   delete process.env.BREVO_SENDER_NAME;
   delete process.env.CONTACT_ADMIN_EMAIL;
   delete process.env.CAREER_SENDER_EMAIL;
+  delete process.env.CAREER_SENDER_NAME;
   delete process.env.CAREER_ADMIN_EMAIL;
   global.fetch = ORIGINAL_FETCH;
 });
@@ -302,6 +305,7 @@ test('the chatbot path keeps its admin-only behaviour', async () => {
 
 test('career applications send both messages and reply to the applicant', async () => {
   process.env.CAREER_SENDER_EMAIL = HR_EMAIL;
+  process.env.CAREER_SENDER_NAME = HR_NAME;
   process.env.CAREER_ADMIN_EMAIL = HR_EMAIL;
   const sent = stubBrevo();
 
@@ -316,6 +320,7 @@ test('career applications send both messages and reply to the applicant', async 
 
 test('contact and career mail use different senders and recipients', async () => {
   process.env.CAREER_SENDER_EMAIL = HR_EMAIL;
+  process.env.CAREER_SENDER_NAME = HR_NAME;
   process.env.CAREER_ADMIN_EMAIL = HR_EMAIL;
   const sent = stubBrevo();
 
@@ -327,17 +332,24 @@ test('contact and career mail use different senders and recipients', async () =>
 
   const contactMail = sent.filter((m) => [ADMIN_EMAIL, VISITOR_EMAIL].includes(m.to[0].email));
   assert.equal(contactMail.length, 2);
-  for (const mail of contactMail) assert.equal(mail.sender.email, ADMIN_EMAIL);
+  for (const mail of contactMail) {
+    assert.equal(mail.sender.email, ADMIN_EMAIL);
+    assert.equal(mail.sender.name, ADMIN_NAME);
+  }
 
   const careerMail = sent.filter((m) => [HR_EMAIL, CAREER.email].includes(m.to[0].email));
   assert.equal(careerMail.length, 2);
-  for (const mail of careerMail) assert.equal(mail.sender.email, HR_EMAIL);
+  for (const mail of careerMail) {
+    assert.equal(mail.sender.email, HR_EMAIL);
+    assert.equal(mail.sender.name, HR_NAME, 'career mail is sent under the recruiter name');
+  }
 
   assert.equal(sent.length, 4, 'no message is duplicated across the two flows');
 });
 
 test('the recruiter notice advertises the HR mailbox, not the general inbox', async () => {
   process.env.CAREER_SENDER_EMAIL = HR_EMAIL;
+  process.env.CAREER_SENDER_NAME = HR_NAME;
   process.env.CAREER_ADMIN_EMAIL = HR_EMAIL;
   const sent = stubBrevo();
 
@@ -351,6 +363,7 @@ test('the recruiter notice advertises the HR mailbox, not the general inbox', as
 
 test('the applicant confirmation publishes neither mailbox', async () => {
   process.env.CAREER_SENDER_EMAIL = HR_EMAIL;
+  process.env.CAREER_SENDER_NAME = HR_NAME;
   process.env.CAREER_ADMIN_EMAIL = HR_EMAIL;
   const sent = stubBrevo();
 
@@ -370,6 +383,21 @@ test('career mail falls back to the contact mailbox when nothing else is set', a
 
   assert.deepEqual(summarise(delivery), { visitor: 'sent', admin: 'sent' });
   assert.equal(sent.length, 2);
-  for (const mail of sent) assert.equal(mail.sender.email, ADMIN_EMAIL);
+  for (const mail of sent) {
+    assert.equal(mail.sender.email, ADMIN_EMAIL);
+    assert.equal(mail.sender.name, ADMIN_NAME);
+  }
   assert.ok(sent.some((m) => m.to[0].email === ADMIN_EMAIL));
+});
+
+test('a career address without its own name uses the contact display name', async () => {
+  process.env.CAREER_SENDER_EMAIL = HR_EMAIL;
+  const sent = stubBrevo();
+
+  await sendCareerEmails(CAREER);
+
+  for (const mail of sent) {
+    assert.equal(mail.sender.email, HR_EMAIL);
+    assert.equal(mail.sender.name, ADMIN_NAME);
+  }
 });
