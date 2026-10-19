@@ -247,6 +247,24 @@ test('missing Brevo configuration fails both sends without calling the network',
   assert.equal(called, false);
 });
 
+test('an SMTP key is recorded with a distinct, actionable failure code', async () => {
+  // This is the exact mistake that produced a bare "unauthorized" on the HTTP
+  // API: an SMTP key pasted into BREVO_API_KEY.
+  process.env.BREVO_API_KEY = 'xsmtpsib-' + 'a'.repeat(64) + '-' + 'b'.repeat(16);
+  let called = false;
+  global.fetch = async () => {
+    called = true;
+    return { ok: true, status: 201, json: async () => ({ messageId: 'x' }) };
+  };
+
+  const delivery = await sendContactEmails(CONTACT);
+
+  assert.deepEqual(summarise(delivery), { visitor: 'failed', admin: 'failed' });
+  assert.equal(delivery.admin.code, 'smtp-key-not-api-key');
+  assert.equal(delivery.visitor.code, 'smtp-key-not-api-key');
+  assert.equal(called, false);
+});
+
 test('a missing admin recipient fails only the admin notice', async () => {
   delete process.env.CONTACT_ADMIN_EMAIL;
   delete process.env.ADMIN_EMAIL;

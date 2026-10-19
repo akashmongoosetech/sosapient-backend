@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const {
   sendTransactionalEmail,
   isBrevoConfigured,
+  apiKeyProblem,
   EmailConfigError,
   EmailSendError,
   BREVO_ENDPOINT,
@@ -55,6 +56,40 @@ test('isBrevoConfigured needs both an API key and a usable sender address', () =
   process.env.BREVO_API_KEY = 'test-api-key';
   process.env.BREVO_SENDER_EMAIL = 'not-an-address';
   assert.equal(isBrevoConfigured(), false);
+});
+
+test('apiKeyProblem reports missing, smtp-key, or nothing', () => {
+  delete process.env.BREVO_API_KEY;
+  assert.equal(apiKeyProblem(), 'missing');
+
+  process.env.BREVO_API_KEY = 'xkeysib-' + 'a'.repeat(64) + '-' + 'b'.repeat(16);
+  assert.equal(apiKeyProblem(), '');
+
+  process.env.BREVO_API_KEY = 'something-else-entirely';
+  assert.equal(apiKeyProblem(), '', 'unknown formats are left for Brevo to judge');
+});
+
+test('an SMTP key is rejected as the wrong kind of credential', async () => {
+  // Real SMTP keys start with xsmtpsib- and only work on the SMTP relay. Brevo
+  // answers the HTTP API with a bare "unauthorized", so we name the problem
+  // ourselves instead of spending a round trip on a credential that cannot work.
+  process.env.BREVO_API_KEY = 'xsmtpsib-' + 'a'.repeat(64) + '-' + 'b'.repeat(16);
+
+  assert.equal(apiKeyProblem(), 'smtp-key');
+  assert.equal(isBrevoConfigured(), false);
+
+  let called = false;
+  global.fetch = async () => {
+    called = true;
+    return jsonResponse(201, {});
+  };
+
+  await assert.rejects(
+    () => sendTransactionalEmail(MESSAGE),
+    (err) =>
+      err instanceof EmailConfigError && err.code === 'smtp-key-not-api-key' && err.status === 503
+  );
+  assert.equal(called, false, 'must not waste a round trip on a known-bad credential');
 });
 
 test('sendTransactionalEmail fails closed when Brevo is not configured', async () => {

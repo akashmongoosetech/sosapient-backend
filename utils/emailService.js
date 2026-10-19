@@ -9,7 +9,7 @@
 //   - Provider errors are reduced to a short code. Raw provider text and
 //     message bodies never reach the logs or the client.
 
-const { sendTransactionalEmail, EmailConfigError, warnIfNotConfigured } = require('./brevo');
+const { sendTransactionalEmail, EmailConfigError, warnIfMisconfigured } = require('./brevo');
 const templates = require('./emailTemplates');
 
 const STATUS_SENT = 'sent';
@@ -31,15 +31,17 @@ function failureCode(error) {
 }
 
 // One message, one attempt-set. Never throws: the caller needs the outcome of
-// each message independently.
-async function attempt(message) {
+// each message independently. `label` only shapes the log line, so a failure
+// says which recipient it belonged to instead of logging an identical line twice.
+async function attempt(label, message) {
   try {
     const { messageId } = await sendTransactionalEmail(message);
     return { status: STATUS_SENT, messageId: messageId || '', at: new Date() };
   } catch (error) {
     const code = failureCode(error);
-    // Log the code only — never the provider's raw response or the email body.
-    console.error(`[email] send failed (${code})`);
+    // Log the label and code only — never the provider's raw response or the
+    // email body, both of which carry addresses and message content.
+    console.error(`[email] ${label} send failed (${code})`);
     return { status: STATUS_FAILED, code, at: new Date() };
   }
 }
@@ -105,7 +107,7 @@ async function persistDelivery(doc, delivery) {
  */
 async function sendContactEmails(contact, options = {}) {
   const notifyVisitor = options.notifyVisitor !== false;
-  warnIfNotConfigured();
+  warnIfMisconfigured();
 
   const adminTo = resolveAdminRecipient();
   if (!adminTo) console.error('[email] CONTACT_ADMIN_EMAIL is not set; admin notification cannot be sent');
@@ -114,9 +116,11 @@ async function sendContactEmails(contact, options = {}) {
   const adminReplyTo = String(contact.email || '').trim();
 
   const [adminResult, visitorResult] = await Promise.all([
-    adminTo ? attempt(buildMessage(templates.contactAdminEmail(contact), adminTo, adminReplyTo)) : missingRecipient(),
+    adminTo
+      ? attempt('contact-admin', buildMessage(templates.contactAdminEmail(contact), adminTo, adminReplyTo))
+      : missingRecipient(),
     notifyVisitor
-      ? attempt(buildMessage(templates.contactVisitorEmail(contact), contact.email))
+      ? attempt('contact-visitor', buildMessage(templates.contactVisitorEmail(contact), contact.email))
       : Promise.resolve({ status: STATUS_SKIPPED, at: new Date() })
   ]);
 
@@ -131,7 +135,7 @@ async function sendContactEmails(contact, options = {}) {
  * @returns {Promise<{visitor: object, admin: object}>}
  */
 async function sendCareerEmails(career) {
-  warnIfNotConfigured();
+  warnIfMisconfigured();
 
   const adminTo = resolveAdminRecipient();
   if (!adminTo) console.error('[email] CONTACT_ADMIN_EMAIL is not set; admin notification cannot be sent');
@@ -139,8 +143,10 @@ async function sendCareerEmails(career) {
   const adminReplyTo = String(career.email || '').trim();
 
   const [adminResult, visitorResult] = await Promise.all([
-    adminTo ? attempt(buildMessage(templates.careerAdminEmail(career), adminTo, adminReplyTo)) : missingRecipient(),
-    attempt(buildMessage(templates.careerVisitorEmail(career), career.email))
+    adminTo
+      ? attempt('career-admin', buildMessage(templates.careerAdminEmail(career), adminTo, adminReplyTo))
+      : missingRecipient(),
+    attempt('career-visitor', buildMessage(templates.careerVisitorEmail(career), career.email))
   ]);
 
   return { admin: adminResult, visitor: visitorResult };

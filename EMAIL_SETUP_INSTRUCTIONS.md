@@ -116,6 +116,7 @@ enquiry is saved — so check the logs if notifications stop arriving.
 | --- | --- |
 | No email at all, form still works | `BREVO_API_KEY` or `BREVO_SENDER_EMAIL` missing in the host environment |
 | `delivery.admin = failed`, code `invalid-recipient` | `CONTACT_ADMIN_EMAIL` is not a valid address |
+| `delivery.* = failed`, code `smtp-key-not-api-key` | `BREVO_API_KEY` is an SMTP key (`xsmtpsib-`). Generate a v3 API key on the **API Keys** tab, not the **SMTP** tab |
 | `delivery.* = failed`, code `http-401` | API key revoked, wrong, or lacking permission |
 | `delivery.* = failed`, code `not-configured` | Brevo env vars not set (see above) |
 | Sends fine but lands in spam | SPF/DKIM not yet authenticated, or the sender is unverified |

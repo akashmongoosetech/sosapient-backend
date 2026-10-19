@@ -18,14 +18,20 @@ const MAX_ATTEMPTS = 3;
 const RETRY_BACKOFF_MS = [500, 1500];
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Brevo issues two different credentials from the same "SMTP & API" page, and
+// they are not interchangeable: the SMTP key only works on the SMTP relay, while
+// the HTTP API requires a v3 API key. Pasting the wrong one is an easy mistake,
+// and all Brevo says is "unauthorized", so we name the problem ourselves.
+const SMTP_KEY_PREFIX = 'xsmtpsib-';
+
 // Raised when Brevo is not configured. Distinct from a send failure so callers
 // can tell "we could not even try" apart from "Brevo refused the message".
 class EmailConfigError extends Error {
-  constructor(message = 'Transactional email is not configured') {
+  constructor(message = 'Transactional email is not configured', code = 'not-configured') {
     super(message);
     this.name = 'EmailConfigError';
     this.status = 503;
-    this.code = 'not-configured';
+    this.code = code;
   }
 }
 
@@ -45,29 +51,47 @@ function senderConfig() {
   return { email, name };
 }
 
-function isBrevoConfigured() {
-  const apiKey = String(process.env.BREVO_API_KEY || '').trim();
-  const { email } = senderConfig();
-  return apiKey.length > 0 && EMAIL_PATTERN.test(email);
+// Returns '' when the key looks usable, otherwise the reason it does not.
+// Only the definitively-wrong SMTP prefix is rejected: an unrecognised format is
+// left for Brevo to judge rather than second-guessed here.
+function apiKeyProblem() {
+  const key = String(process.env.BREVO_API_KEY || '').trim();
+  if (!key) return 'missing';
+  if (key.startsWith(SMTP_KEY_PREFIX)) return 'smtp-key';
+  return '';
 }
 
-// Setup guidance is emitted once, never per request, and never contains the
-// key itself or any message content.
+function isBrevoConfigured() {
+  return apiKeyProblem() === '' && EMAIL_PATTERN.test(senderConfig().email);
+}
+
+// Configuration guidance is emitted once, never per request, and never contains
+// the key itself or any message content.
 let configWarningEmitted = false;
-function warnIfNotConfigured() {
+function warnIfMisconfigured() {
   if (isBrevoConfigured() || configWarningEmitted) return;
   configWarningEmitted = true;
 
-  const missing = [];
-  if (!String(process.env.BREVO_API_KEY || '').trim()) missing.push('BREVO_API_KEY');
-  if (!senderConfig().email) missing.push('BREVO_SENDER_EMAIL');
+  const problem = apiKeyProblem();
+  const reasons = [];
 
-  console.warn(
-    `[email] Brevo is not configured, so transactional email is disabled. ` +
-      `Missing: ${missing.join(', ')}. ` +
-      `Create an API key at https://app.brevo.com/settings/keys/api, add and verify the ` +
-      `sender/domain at https://app.brevo.com/senders, then set BREVO_API_KEY and ` +
-      `BREVO_SENDER_EMAIL in the hosting environment.`
+  if (problem === 'missing') {
+    reasons.push('BREVO_API_KEY is not set.');
+  } else if (problem === 'smtp-key') {
+    reasons.push(
+      'BREVO_API_KEY is an SMTP key (prefix "xsmtpsib-"), which the HTTP API does not accept. ' +
+        'Generate a v3 API key on the "API Keys" tab of https://app.brevo.com/settings/keys/api ' +
+        '(the "SMTP" tab holds a different credential).'
+    );
+  }
+
+  if (!senderConfig().email) {
+    reasons.push('BREVO_SENDER_EMAIL is not set, or is not a valid email address.');
+  }
+
+  console.error(
+    `[email] Brevo is not configured, so transactional email is disabled. ${reasons.join(' ')} ` +
+      'Submissions are still saved and still show as successful; only the email is skipped.'
   );
 }
 
@@ -151,8 +175,14 @@ async function postOnce(payload, apiKey) {
  */
 async function sendTransactionalEmail(message) {
   if (!isBrevoConfigured()) {
-    warnIfNotConfigured();
-    throw new EmailConfigError();
+    warnIfMisconfigured();
+    const problem = apiKeyProblem();
+    throw new EmailConfigError(
+      problem === 'smtp-key'
+        ? 'BREVO_API_KEY is an SMTP key, not a v3 API key'
+        : 'Transactional email is not configured',
+      problem === 'smtp-key' ? 'smtp-key-not-api-key' : 'not-configured'
+    );
   }
 
   const to = String(message.to || '').trim();
@@ -200,7 +230,8 @@ module.exports = {
   MAX_ATTEMPTS,
   EmailConfigError,
   EmailSendError,
+  apiKeyProblem,
   isBrevoConfigured,
-  warnIfNotConfigured,
+  warnIfMisconfigured,
   sendTransactionalEmail
 };
