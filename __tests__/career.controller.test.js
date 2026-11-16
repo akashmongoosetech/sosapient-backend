@@ -27,6 +27,10 @@ const VALID_BODY = {
   currentCompany: 'Old Co',
   expectedSalary: 'INR 18L',
   noticePeriod: '60 days',
+  currentAddress: '12, MG Road',
+  city: 'Indore',
+  state: 'Madhya Pradesh',
+  country: 'India',
   coverLetter: 'I would love to join.'
 };
 
@@ -133,6 +137,20 @@ test('the stored resume is handed to the model and kept out of the response', as
   const serialised = JSON.stringify(res.body);
   assert.equal(serialised.includes(RESUME_TEXT), false, 'resume bytes must not be returned');
   assert.deepEqual(res.body.data.resume, { filename: 'rahul-cv.pdf', contentType: 'application/pdf' });
+});
+
+test('the current address is stored and returned with the application', async () => {
+  const res = await submit();
+
+  assert.equal(created[0].currentAddress, '12, MG Road');
+  assert.equal(created[0].city, 'Indore');
+  assert.equal(created[0].state, 'Madhya Pradesh');
+  assert.equal(created[0].country, 'India');
+
+  assert.equal(res.body.data.currentAddress, '12, MG Road');
+  assert.equal(res.body.data.city, 'Indore');
+  assert.equal(res.body.data.state, 'Madhya Pradesh');
+  assert.equal(res.body.data.country, 'India');
 });
 
 test('the response carries no delivery record or provider identifiers', async () => {

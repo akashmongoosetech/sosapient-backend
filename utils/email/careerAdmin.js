@@ -30,6 +30,11 @@ function careerAdminEmail(career, options = {}) {
   const position = toText(source.position);
   const coverLetter = toText(source.coverLetter);
   const resumeName = source.resume && source.resume.filename ? toText(source.resume.filename) : '';
+  const address = toText(source.currentAddress);
+  const city = toText(source.city);
+  const stateName = toText(source.state);
+  const country = toText(source.country);
+  const hasAddress = Boolean(address || city || stateName || country);
 
   const details = detailRows([
     ['Position', position],
@@ -47,6 +52,15 @@ function careerAdminEmail(career, options = {}) {
     paragraph(`A new job application was submitted on the ${escapeHtml(COMPANY.name)} website.`),
     sectionLabel('Applicant details'),
     details,
+    hasAddress ? sectionLabel('Current address') : '',
+    hasAddress
+      ? detailRows([
+          ['Address', address],
+          ['City', city],
+          ['State', stateName],
+          ['Country', country]
+        ])
+      : '',
     coverLetter ? sectionLabel('Cover letter') : '',
     coverLetter ? panel(escapeMultiline(coverLetter)) : '',
     sectionLabel('Resume'),
@@ -72,6 +86,18 @@ function careerAdminEmail(career, options = {}) {
     `Notice period:   ${toText(source.noticePeriod)}`,
     `Submitted:       ${source.createdAt ? formatIst(source.createdAt) : ''}`
   ];
+
+  if (hasAddress) {
+    textLines.push('', 'Current address');
+    for (const [label, value] of [
+      ['Address', address],
+      ['City', city],
+      ['State', stateName],
+      ['Country', country]
+    ]) {
+      if (value) textLines.push(`${label}:`.padEnd(17) + value);
+    }
+  }
 
   if (coverLetter) {
     textLines.push('', 'Cover letter:', coverLetter);

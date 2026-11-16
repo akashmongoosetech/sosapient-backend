@@ -46,6 +46,29 @@ const careerSchema = new mongoose.Schema({
     trim: true,
     default: ''
   },
+  // Where the candidate currently lives. Optional in the schema on purpose: the
+  // form requires them, but making them required here would reject applications
+  // from the previously deployed frontend during a staggered rollout.
+  currentAddress: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  city: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  state: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  country: {
+    type: String,
+    trim: true,
+    default: ''
+  },
   status: {
     type: String,
     enum: ['pending', 'reviewed', 'shortlisted', 'rejected'],

@@ -32,6 +32,10 @@ const CAREER = {
   experience: '4',
   currentCompany: 'Old Co',
   coverLetter: 'I would love to join.',
+  currentAddress: '12, MG Road',
+  city: 'Indore',
+  state: 'Madhya Pradesh',
+  country: 'India',
   resume: { filename: 'rahul-cv.pdf' },
   createdAt: new Date('2026-10-19T06:30:00Z')
 };
@@ -144,6 +148,32 @@ test('career applicant email avoids the internal mailbox too', () => {
   assert.equal(html.includes(ADMIN_EMAIL), false);
   assert.equal(text.includes(ADMIN_EMAIL), false);
   assert.ok(html.includes('Frontend Developer'));
+});
+
+test('the recruiter notice includes the candidate current address', () => {
+  const { html, text } = templates.careerAdminEmail(CAREER);
+
+  assert.ok(html.includes('Current address'));
+  assert.ok(html.includes('12, MG Road'));
+  assert.ok(html.includes('Indore'));
+  assert.ok(html.includes('Madhya Pradesh'));
+  assert.ok(text.includes('Current address'));
+  assert.ok(text.includes('12, MG Road'));
+  assert.ok(text.includes('Madhya Pradesh'));
+});
+
+test('the address section is omitted when no address was given', () => {
+  const { html, text } = templates.careerAdminEmail({
+    ...CAREER,
+    currentAddress: '',
+    city: '',
+    state: '',
+    country: ''
+  });
+
+  assert.equal(html.includes('Current address'), false);
+  assert.equal(text.includes('Current address'), false);
+  assert.equal(html.includes('Madhya Pradesh'), false);
 });
 
 test('no template leaks a literal "undefined" into the rendered output', () => {
