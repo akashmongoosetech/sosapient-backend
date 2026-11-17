@@ -69,6 +69,11 @@ const careerSchema = new mongoose.Schema({
     trim: true,
     default: ''
   },
+  linkedinUrl: {
+    type: String,
+    trim: true,
+    default: ''
+  },
   status: {
     type: String,
     enum: ['pending', 'reviewed', 'shortlisted', 'rejected'],

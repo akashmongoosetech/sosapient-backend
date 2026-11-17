@@ -5,7 +5,7 @@ const { isHoneypotFilled } = require('../utils/honeypot');
 function errMsg(error, fallback) {
   return process.env.NODE_ENV === 'production' ? fallback : (error.message || fallback);
 }
-const CAREER_FIELDS = ['name', 'email', 'phone', 'position', 'experience', 'currentCompany', 'expectedSalary', 'noticePeriod', 'currentAddress', 'city', 'state', 'country', 'coverLetter'];
+const CAREER_FIELDS = ['name', 'email', 'phone', 'position', 'experience', 'currentCompany', 'expectedSalary', 'noticePeriod', 'currentAddress', 'city', 'state', 'country', 'linkedinUrl', 'coverLetter'];
 function pickCareer(body = {}) {
   const out = {};
   for (const k of CAREER_FIELDS) {

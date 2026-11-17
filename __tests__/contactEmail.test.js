@@ -36,6 +36,7 @@ const CAREER = {
   city: 'Indore',
   state: 'Madhya Pradesh',
   country: 'India',
+  linkedinUrl: 'https://www.linkedin.com/in/rahul-sharma',
   resume: { filename: 'rahul-cv.pdf' },
   createdAt: new Date('2026-10-19T06:30:00Z')
 };
@@ -160,6 +161,24 @@ test('the recruiter notice includes the candidate current address', () => {
   assert.ok(text.includes('Current address'));
   assert.ok(text.includes('12, MG Road'));
   assert.ok(text.includes('Madhya Pradesh'));
+});
+
+test('the recruiter notice links to the candidate LinkedIn profile', () => {
+  const { html, text } = templates.careerAdminEmail(CAREER);
+
+  assert.ok(html.includes('href="https://www.linkedin.com/in/rahul-sharma"'));
+  assert.ok(html.includes('linkedin.com/in/rahul-sharma'));
+  assert.ok(text.includes('https://www.linkedin.com/in/rahul-sharma'));
+});
+
+test('a non-http LinkedIn value is shown as text, never as a link', () => {
+  const { html } = templates.careerAdminEmail({
+    ...CAREER,
+    linkedinUrl: 'javascript:alert(1)'
+  });
+
+  assert.equal(html.includes('href="javascript:'), false);
+  assert.ok(html.includes('javascript:alert(1)'), 'the value is still visible, just inert');
 });
 
 test('the address section is omitted when no address was given', () => {

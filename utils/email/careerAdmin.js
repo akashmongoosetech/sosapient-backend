@@ -16,6 +16,7 @@ const {
   panel,
   detailRows,
   emailLink,
+  webLink,
   formatIst
 } = require('./primitives');
 const { renderLayout, textContactLines, textSocialLines } = require('./layout');
@@ -35,11 +36,13 @@ function careerAdminEmail(career, options = {}) {
   const stateName = toText(source.state);
   const country = toText(source.country);
   const hasAddress = Boolean(address || city || stateName || country);
+  const linkedinUrl = toText(source.linkedinUrl);
 
   const details = detailRows([
     ['Position', position],
     ['Name', name],
     ['Email', emailLink(email), { html: true }],
+    ['LinkedIn', webLink(linkedinUrl), { html: true }],
     ['Phone', source.phone],
     ['Experience', source.experience],
     ['Current company', source.currentCompany],
@@ -79,6 +82,7 @@ function careerAdminEmail(career, options = {}) {
     `Position:        ${position}`,
     `Name:            ${name}`,
     `Email:           ${email}`,
+    `LinkedIn:        ${linkedinUrl}`,
     `Phone:           ${toText(source.phone)}`,
     `Experience:      ${toText(source.experience)}`,
     `Current company: ${toText(source.currentCompany)}`,

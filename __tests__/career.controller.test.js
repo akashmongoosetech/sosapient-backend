@@ -31,6 +31,7 @@ const VALID_BODY = {
   city: 'Indore',
   state: 'Madhya Pradesh',
   country: 'India',
+  linkedinUrl: 'https://www.linkedin.com/in/rahul-sharma',
   coverLetter: 'I would love to join.'
 };
 
@@ -151,6 +152,13 @@ test('the current address is stored and returned with the application', async ()
   assert.equal(res.body.data.city, 'Indore');
   assert.equal(res.body.data.state, 'Madhya Pradesh');
   assert.equal(res.body.data.country, 'India');
+});
+
+test('the LinkedIn profile is stored and returned with the application', async () => {
+  const res = await submit();
+
+  assert.equal(created[0].linkedinUrl, 'https://www.linkedin.com/in/rahul-sharma');
+  assert.equal(res.body.data.linkedinUrl, 'https://www.linkedin.com/in/rahul-sharma');
 });
 
 test('the response carries no delivery record or provider identifiers', async () => {

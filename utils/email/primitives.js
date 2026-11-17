@@ -66,6 +66,22 @@ function emailLink(value) {
   )}</a>`;
 }
 
+// A profile URL is attacker-controlled too, so only http(s) becomes an anchor.
+// A javascript: or data: value is rendered as escaped text instead.
+const WEB_URL_PATTERN = /^https?:\/\//i;
+
+function isWebUrl(value) {
+  return WEB_URL_PATTERN.test(toText(value));
+}
+
+function webLink(value) {
+  const url = toText(value);
+  if (!isWebUrl(url)) return escapeHtml(url);
+  return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" style="color:${BRAND.primaryDark};text-decoration:none;">${escapeHtml(
+    url.replace(/^https?:\/\//i, '')
+  )}</a>`;
+}
+
 function paragraph(html, options = {}) {
   const size = options.size || 15;
   const color = options.color || BRAND.ink;
@@ -173,8 +189,10 @@ module.exports = {
   escapeMultiline,
   formatIst,
   isEmail,
+  isWebUrl,
   toText,
   emailLink,
+  webLink,
   paragraph,
   greeting,
   sectionLabel,
