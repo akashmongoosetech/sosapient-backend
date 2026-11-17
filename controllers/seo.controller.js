@@ -48,7 +48,8 @@ async function sitemap(req, res) {
       'rag-system-integration',
       'saas-product-development',
       'digital-marketing',
-      'social-media-promotion'
+      'social-media-promotion',
+    'promotion'
     ];
     const cases = await CaseStudy.find({ published: true })
       .select('slug updatedAt')
