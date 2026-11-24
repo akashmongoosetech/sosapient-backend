@@ -9,6 +9,7 @@ const {
 } = require('../controllers/career.controller');
 const { upload, handleMulterError } = require('../middleware/upload');
 const { authenticateUser, requireAdmin } = require('../middleware/auth');
+const { apiKeyAuth } = require('../middleware/apiKeyAuth');
 const { rateLimit } = require('../middleware/rateLimit');
 const { verifyRecaptcha } = require('../middleware/recaptcha');
 const { sanitizeFilename } = require('../utils/sanitize');
@@ -21,8 +22,18 @@ const Career = require('../models/career.model');
 // never written to disk.
 router.post('/', rateLimit({ windowMs: 60000, max: 10 }), upload.single('resume'), handleMulterError, verifyRecaptcha, createCareer);
 
-// Get all career applications (ADMIN only)
-router.get('/', authenticateUser, requireAdmin, getAllCareers);
+// Get all career applications (ADMIN via JWT, or server-to-server via API key).
+// Accepts X-Career-Sync-Api-Key header for HRMS synchronization, otherwise
+// requires authenticated ADMIN user.
+router.get('/', (req, res, next) => {
+  if (req.headers['x-career-sync-api-key']) {
+    return apiKeyAuth(req, res, next);
+  }
+  return authenticateUser(req, res, (err) => {
+    if (err) return next(err);
+    return requireAdmin(req, res, next);
+  });
+}, getAllCareers);
 
 // Get single career application (ADMIN only)
 router.get('/:id', authenticateUser, requireAdmin, getCareer);
