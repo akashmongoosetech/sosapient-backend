@@ -27,12 +27,34 @@ function slugify(value) {
     .slice(0, 120) || 'role';
 }
 
-jobSchema.pre('validate', function (next) {
-  if (!this.slug && this.title) this.slug = slugify(this.title);
-  else if (this.slug) this.slug = slugify(this.slug);
-  next();
+async function generateUniqueSlug(model, title, excludeId = null) {
+  let base = slugify(title);
+  let slug = base;
+  let counter = 1;
+
+  while (true) {
+    const query = { slug };
+    if (excludeId) query._id = { $ne: excludeId };
+    const existing = await model.findOne(query);
+    if (!existing) return slug;
+    counter += 1;
+    slug = `${base}-${counter}`;
+    if (counter > 1000) throw new Error('Unable to generate unique slug');
+  }
+}
+
+jobSchema.pre('validate', async function (next) {
+  try {
+    if (this.isModified('title') || !this.slug) {
+      this.slug = await generateUniqueSlug(this.constructor, this.title, this._id);
+    }
+    next();
+  } catch (err) {
+    next(err);
+  }
 });
 
 module.exports = mongoose.model('Job', jobSchema);
+module.exports.generateUniqueSlug = generateUniqueSlug;
 
 

@@ -1,4 +1,5 @@
 const Job = require('../models/job.model');
+const { generateUniqueSlug } = Job;
 const { sanitizeRichField } = require('../utils/sanitizeRichHtml');
 
 // Rich-text job fields: sanitize untrusted editor HTML before persistence.
@@ -71,8 +72,18 @@ const getJobById = async (req, res) => {
 // Update job
 const updateJob = async (req, res) => {
   try {
-    const job = await Job.findByIdAndUpdate(req.params.id, sanitizeJobFields(pickJob(req.body)), { new: true, runValidators: true });
+    const job = await Job.findById(req.params.id);
     if (!job) return res.status(404).json({ success: false, message: 'Job not found' });
+
+    const updated = sanitizeJobFields(pickJob(req.body));
+    Object.assign(job, updated);
+
+    // Regenerate slug if title changed, ensuring uniqueness
+    if (updated.title && updated.title !== job.title) {
+      job.slug = await generateUniqueSlug(Job, updated.title, job._id);
+    }
+
+    await job.save();
     res.json({ success: true, data: job });
   } catch (error) {
     res.status(400).json({ success: false, message: errMessage(error, 'Error updating job') });

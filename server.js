@@ -191,6 +191,24 @@ mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000 })
     } catch (e) {
       console.warn('User index warmup failed:', e.message);
     }
+
+    // Backfill slugs for existing jobs missing them (safe to re-run; only
+    // updates jobs without a slug).
+    try {
+      const Job = require('./models/job.model');
+      await Job.createIndexes();
+      console.log('Job indexes ready');
+      const jobsWithoutSlug = await Job.find({ $or: [{ slug: { $exists: false } }, { slug: '' }] }).lean();
+      for (const job of jobsWithoutSlug) {
+        const slug = await Job.generateUniqueSlug(Job, job.title, job._id);
+        await Job.updateOne({ _id: job._id }, { $set: { slug } });
+      }
+      if (jobsWithoutSlug.length > 0) {
+        console.log(`Backfilled slugs for ${jobsWithoutSlug.length} existing job(s)`);
+      }
+    } catch (e) {
+      console.warn('Job slug backfill failed:', e.message);
+    }
     // Start server
     const PORT = process.env.PORT || 5000;
     server = app.listen(PORT, () => {
