@@ -86,6 +86,21 @@ app.use((req, res, next) => {
   next();
 });
 
+// Request timing middleware: logs total server response time per request
+// to help identify slow endpoints. No PII is logged.
+app.use((req, res, next) => {
+  const start = process.hrtime.bigint();
+  res.on('finish', () => {
+    if (process.env.NODE_ENV !== 'test') {
+      const ms = Number(process.hrtime.bigint() - start) / 1000000n;
+      if (ms > 500) {
+        console.log(`[slow] ${req.method} ${req.url} ${res.statusCode} ${ms.toFixed(0)}ms`);
+      }
+    }
+  });
+  next();
+});
+
 // Serve static files for uploaded images (ensure directory exists)
 const fs = require('fs');
 const uploadsDir = path.join(__dirname, 'uploads');

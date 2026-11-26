@@ -14,7 +14,7 @@ function pickCareer(body = {}) {
   return out;
 }
 function stripResume(doc) {
-  const obj = doc.toObject();
+  const obj = doc && typeof doc.toObject === 'function' ? doc.toObject() : { ...doc };
   // Delivery provider codes are operational detail and stay server-side; the
   // caller receives the status summary in `delivery` instead.
   delete obj.emailDelivery;
@@ -100,7 +100,7 @@ const getAllCareers = async (req, res) => {
 // Get single career application
 const getCareer = async (req, res) => {
   try {
-    const career = await Career.findById(req.params.id).select('-resume.data');
+    const career = await Career.findById(req.params.id).select('-resume.data').lean();
     if (!career) {
       return res.status(404).json({
         success: false,

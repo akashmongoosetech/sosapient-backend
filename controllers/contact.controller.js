@@ -64,7 +64,7 @@ function validateContact(data) {
 // per-recipient status is returned in `delivery`, while the provider error codes
 // inside the document are operational detail that stays server-side.
 function publicContact(contact) {
-  const obj = contact.toObject();
+  const obj = contact && typeof contact.toObject === 'function' ? contact.toObject() : { ...contact };
   delete obj.emailDelivery;
   return obj;
 }
@@ -151,7 +151,7 @@ exports.getAllContacts = async (req, res) => {
 // Get single contact submission
 exports.getContact = async (req, res) => {
   try {
-    const contact = await Contact.findById(req.params.id);
+    const contact = await Contact.findById(req.params.id).lean();
     if (!contact) {
       return res.status(404).json({
         success: false,
