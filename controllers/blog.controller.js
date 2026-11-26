@@ -508,12 +508,16 @@ const voteOnComment = async (req, res) => {
 const getBlogBySlug = async (req, res) => {
   try {
     const slug = String(req.params.slug || '').toLowerCase().slice(0, 160);
-    // Single atomic read (+view bump); comments load via GET /:slug/comments.
-    const blog = await Blog.findOneAndUpdate(
+    // Increment view count in the background (fire-and-forget): a read path
+    // must not block on a write. The count is approximate — acceptable for a
+    // view counter — but the page never waits for it.
+    void Blog.findOneAndUpdate(
       { slug, status: 'published' },
-      { $inc: { views: 1 } },
-      { new: true }
-    )
+      { $inc: { views: 1 } }
+    ).catch(() => { /* best-effort */ });
+
+    // Single read for the blog data (no write on the read path).
+    const blog = await Blog.findOne({ slug, status: 'published' })
       .select('-comments')
       .lean();
 

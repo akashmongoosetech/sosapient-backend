@@ -114,13 +114,34 @@ async function getLeads(req, res) {
     const sortField = SORT_FIELDS[String(req.query.sortBy)] || 'createdAt';
     const sortOrder = String(req.query.sortOrder).toLowerCase() === 'asc' ? 1 : -1;
 
-    const total = await Lead.countDocuments(filter);
+    // Single aggregation: count + paginated fetch in one query via $facet.
+    // Avoids re-evaluating the filter twice (countDocuments then find).
+    const facetResult = await Lead.aggregate([
+      { $match: filter },
+      {
+        $facet: {
+          metadata: [{ $count: 'total' }],
+          data: [
+            { $sort: { [sortField]: sortOrder, _id: sortOrder } },
+            { $skip: (page - 1) * limit },
+            { $limit: limit },
+            {
+              $project: {
+                phoneKey: 0,
+                websiteKey: 0,
+                titleCityKey: 0,
+                __v: 0,
+              },
+            },
+          ],
+        },
+      },
+    ]).allowDiskUse(true);
+
+    const metadata = facetResult[0]?.metadata[0] || { total: 0 };
+    const total = metadata.total;
     const totalPages = Math.max(1, Math.ceil(total / limit));
-    const items = await Lead.find(filter)
-      .sort({ [sortField]: sortOrder, _id: sortOrder })
-      .skip((page - 1) * limit)
-      .limit(limit)
-      .lean();
+    const items = facetResult[0]?.data || [];
     return res.json({
       success: true,
       data: items.map(publicDoc),

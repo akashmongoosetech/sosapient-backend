@@ -34,7 +34,7 @@ async function authenticateUser(req, res, next) {
     if (payload.type !== 'access' || payload.tv === undefined) {
       return res.status(401).json({ success: false, message: 'Unauthorized: invalid token type' });
     }
-    const user = await User.findById(userId);
+    const user = await User.findById(userId).lean();
     if (!user) {
       return res.status(401).json({ success: false, message: 'Unauthorized: user not found' });
     }
@@ -74,7 +74,7 @@ async function optionalAuth(req, res, next) {
     if (payload.type !== 'access' || payload.tv === undefined) return next();
     const userId = payload.sub || payload.userId;
     if (!userId) return next();
-    const user = await User.findById(userId);
+    const user = await User.findById(userId).lean();
     if (!user) return next();
     if ((user.tokenVersion || 0) !== payload.tv) return next();
     req.user = user;

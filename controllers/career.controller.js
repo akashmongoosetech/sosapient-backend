@@ -70,10 +70,20 @@ const getAllCareers = async (req, res) => {
   try {
     const page = Math.min(Math.max(parseInt(req.query.page, 10) || 1, 1), 1000);
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 100);
-    const [careers, total] = await Promise.all([
-      Career.find().select('-resume.data').sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit),
-      Career.countDocuments()
-    ]);
+    // Single aggregation: count + paginated fetch in one query. Returns plain
+    // objects (no Mongoose hydration overhead), equivalent to .lean().
+    const facetResult = await Career.aggregate([
+      { $sort: { createdAt: -1 } },
+      {
+        $facet: {
+          metadata: [{ $count: 'total' }],
+          data: [{ $skip: (page - 1) * limit }, { $limit: limit }],
+        },
+      },
+    ]).allowDiskUse(true);
+    const metadata = facetResult[0]?.metadata[0] || { total: 0 };
+    const total = metadata.total;
+    const careers = facetResult[0]?.data || [];
     res.status(200).json({
       success: true,
       data: careers,

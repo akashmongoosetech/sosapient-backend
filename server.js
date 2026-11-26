@@ -183,13 +183,28 @@ const t0 = Date.now();
 mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000 })
   .then(async () => {
     console.log(`Connected to MongoDB in ${Date.now() - t0}ms`);
-    // Warm up indexes in the background so the first signup/login
+    // Warm up indexes in the background so the first request
     // doesn't pay index-build cost inside the request.
-    try {
-      await require('./models/User').createIndexes();
-      console.log('User indexes ready');
-    } catch (e) {
-      console.warn('User index warmup failed:', e.message);
+    const models = [
+      require('./models/User'),
+      require('./models/lead.model'),
+      require('./models/contact.model'),
+      require('./models/career.model'),
+      require('./models/job.model'),
+      require('./models/caseStudy.model'),
+      require('./models/certificate.model'),
+      require('./models/blog.model'),
+      require('./models/Subscriber'),
+      require('./models/deal.model'),
+      require('./models/imageAsset.model'),
+    ];
+    for (const Model of models) {
+      try {
+        await Model.createIndexes();
+        console.log(`${Model.modelName} indexes ready`);
+      } catch (e) {
+        console.warn(`${Model.modelName} index warmup failed:`, e.message);
+      }
     }
 
     // Backfill slugs for existing jobs missing them (safe to re-run; only

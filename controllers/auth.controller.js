@@ -194,7 +194,22 @@ async function login(req, res) {
 }
 
 async function me(req, res) {
-  return res.json({ success: true, user: req.user.toSafeJSON() });
+  const u = req.user;
+  return res.json({
+    success: true,
+    user: {
+      id: String(u._id),
+      firstName: u.firstName,
+      lastName: u.lastName,
+      username: u.username,
+      email: u.email,
+      mobile: u.mobile,
+      profilePic: u.profilePic || '',
+      role: u.role,
+      createdAt: u.createdAt,
+      updatedAt: u.updatedAt
+    }
+  });
 }
 
 async function logout(req, res) {

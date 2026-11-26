@@ -46,10 +46,20 @@ router.get('/subscribers', authenticateUser, requireAdmin, async (req, res) => {
   try {
     const page = Math.min(Math.max(parseInt(req.query.page, 10) || 1, 1), 1000);
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 100);
-    const [subscribers, total] = await Promise.all([
-      Subscriber.find().sort({ subscribedAt: -1 }).skip((page - 1) * limit).limit(limit),
-      Subscriber.countDocuments()
-    ]);
+    // Single aggregation: count + paginated fetch in one query. Returns plain
+    // objects (no Mongoose hydration overhead), equivalent to .lean().
+    const facetResult = await Subscriber.aggregate([
+      { $sort: { subscribedAt: -1 } },
+      {
+        $facet: {
+          metadata: [{ $count: 'total' }],
+          data: [{ $skip: (page - 1) * limit }, { $limit: limit }],
+        },
+      },
+    ]).allowDiskUse(true);
+    const metadata = facetResult[0]?.metadata[0] || { total: 0 };
+    const total = metadata.total;
+    const subscribers = facetResult[0]?.data || [];
     res.json({ success: true, data: subscribers, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error fetching subscribers' });

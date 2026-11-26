@@ -33,5 +33,13 @@ leadSchema.index({ city: 1 });
 leadSchema.index({ categoryName: 1 });
 leadSchema.index({ createdAt: -1 });
 
+// Compound indexes for the common visibility + sort/filter patterns in getLeads.
+leadSchema.index({ status: 1, createdAt: -1 });
+leadSchema.index({ city: 1, status: 1 });
+leadSchema.index({ dealId: 1, status: 1 });
+
+// Text index for the lead search $or query across title, categoryName, city.
+leadSchema.index({ title: 'text', categoryName: 'text', city: 'text' });
+
 module.exports = mongoose.model('Lead', leadSchema);
 module.exports.LEAD_STATUSES = LEAD_STATUSES;

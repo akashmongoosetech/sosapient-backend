@@ -155,7 +155,6 @@ async function getDealById(req, res) {
     }
     const doc = await Deal.findById(id)
       .select(DEAL_SELECT_NO_BYTES)
-      .populate('sourceLeadId', 'title status city')
       .lean();
     if (!doc) {
       return res.status(404).json({ success: false, message: 'Deal not found' });
@@ -285,17 +284,23 @@ async function addRequirement(req, res) {
       return res.status(400).json({ success: false, message: 'Requirement title is required' });
     }
     const description = sanitizeRichHtml(typeof (req.body && req.body.description) === 'string' ? req.body.description : '');
-    const doc = await Deal.findById(id);
+    // Guard: check current requirement count via a lightweight projection before pushing.
+    const existing = await Deal.findById(id).select('requirements').lean();
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Deal not found' });
+    }
+    if (existing.requirements.length >= 100) {
+      return res.status(400).json({ success: false, message: 'Too many requirements on this deal' });
+    }
+    const doc = await Deal.findByIdAndUpdate(
+      id,
+      { $push: { requirements: { title, description } } },
+      { new: true }
+    ).select(DEAL_SELECT_NO_BYTES).lean();
     if (!doc) {
       return res.status(404).json({ success: false, message: 'Deal not found' });
     }
-    if (doc.requirements.length >= 100) {
-      return res.status(400).json({ success: false, message: 'Too many requirements on this deal' });
-    }
-    doc.requirements.push({ title, description });
-    await doc.save();
-    const fresh = await Deal.findById(id).select(DEAL_SELECT_NO_BYTES).lean();
-    return res.status(201).json({ success: true, message: 'Requirement added', data: stripAttachmentData(fresh) });
+    return res.status(201).json({ success: true, message: 'Requirement added', data: stripAttachmentData(doc) });
   } catch (error) {
     if (error && error.name === 'ValidationError') {
       return res.status(400).json({ success: false, message: 'Validation failed', error: errDetail(error) });
@@ -312,30 +317,36 @@ async function updateRequirement(req, res) {
     if (!isValidId(id) || !isValidId(reqId)) {
       return res.status(400).json({ success: false, message: 'Invalid ID' });
     }
-    const doc = await Deal.findById(id);
-    if (!doc) {
-      return res.status(404).json({ success: false, message: 'Deal not found' });
-    }
-    const item = findSubdoc(doc, 'requirements', reqId);
-    if (!item) {
-      return res.status(404).json({ success: false, message: 'Requirement not found' });
-    }
+    const setFields = {};
     if (req.body && req.body.title !== undefined) {
       const title = cleanText(req.body.title, 200);
       if (!title) {
         return res.status(400).json({ success: false, message: 'Requirement title is required' });
       }
-      item.title = title;
+      setFields['requirements.$.title'] = title;
     }
     if (req.body && req.body.description !== undefined) {
       if (typeof req.body.description !== 'string') {
         return res.status(400).json({ success: false, message: 'Invalid description' });
       }
-      item.description = sanitizeRichHtml(req.body.description);
+      setFields['requirements.$.description'] = sanitizeRichHtml(req.body.description);
     }
-    await doc.save();
-    const fresh = await Deal.findById(id).select(DEAL_SELECT_NO_BYTES).lean();
-    return res.json({ success: true, message: 'Requirement updated', data: stripAttachmentData(fresh) });
+    if (Object.keys(setFields).length === 0) {
+      const doc = await Deal.findById(id).select(DEAL_SELECT_NO_BYTES).lean();
+      if (!doc) {
+        return res.status(404).json({ success: false, message: 'Deal not found' });
+      }
+      return res.json({ success: true, message: 'Requirement updated', data: stripAttachmentData(doc) });
+    }
+    const doc = await Deal.findOneAndUpdate(
+      { _id: id, 'requirements._id': reqId },
+      { $set: setFields },
+      { new: true }
+    ).select(DEAL_SELECT_NO_BYTES).lean();
+    if (!doc) {
+      return res.status(404).json({ success: false, message: 'Requirement not found' });
+    }
+    return res.json({ success: true, message: 'Requirement updated', data: stripAttachmentData(doc) });
   } catch (error) {
     return sendError(res, 500, 'Failed to update requirement.', error);
   }
@@ -372,27 +383,54 @@ async function getReports(req, res) {
     }
     const page = clampInt(req.query.page, 1, 1, 1000);
     const limit = clampInt(req.query.limit, 20, 1, 100);
-    const doc = await Deal.findById(id).select('reports').lean();
-    if (!doc) {
-      return res.status(404).json({ success: false, message: 'Deal not found' });
-    }
-    const sorted = [...(doc.reports || [])].sort((a, b) => new Date(b.date) - new Date(a.date));
-    const total = sorted.length;
+    const oid = new mongoose.Types.ObjectId(id);
+    // Server-side pagination for reports: unwind, sort, skip, limit in MongoDB
+    // instead of loading the full reports array into memory.
+    const result = await Deal.aggregate([
+      { $match: { _id: oid } },
+      {
+        $facet: {
+          metadata: [{ $count: 'total' }],
+          data: [
+            { $unwind: '$reports' },
+            { $sort: { 'reports.date': -1 } },
+            { $skip: (page - 1) * limit },
+            { $limit: limit },
+            {
+              $project: {
+                _id: '$reports._id',
+                date: '$reports.date',
+                workCompleted: '$reports.workCompleted',
+                comment: '$reports.comment',
+                nextPlan: '$reports.nextPlan',
+                createdBy: '$reports.createdBy',
+                attachments: {
+                  $map: {
+                    input: '$reports.attachments',
+                    as: 'a',
+                    in: {
+                      _id: '$$a._id',
+                      filename: '$$a.filename',
+                      contentType: '$$a.contentType',
+                      size: '$$a.size',
+                      uploadedBy: '$$a.uploadedBy',
+                      uploadedAt: '$$a.uploadedAt',
+                    },
+                  },
+                },
+              },
+            },
+          ],
+        },
+      },
+    ]).allowDiskUse(true);
+    const metadata = result[0]?.metadata[0] || { total: 0 };
+    const total = metadata.total;
     const totalPages = Math.max(1, Math.ceil(total / limit));
-    const slice = sorted.slice((page - 1) * limit, page * limit).map((r) => {
-      const copy = { ...r };
-      if (Array.isArray(copy.attachments)) {
-        copy.attachments = copy.attachments.map((a) => {
-          const c = { ...a };
-          delete c.data;
-          return c;
-        });
-      }
-      return copy;
-    });
+    const data = result[0]?.data || [];
     return res.json({
       success: true,
-      data: slice,
+      data,
       pagination: { page, limit, total, totalPages, hasNext: page < totalPages, hasPrev: page > 1 },
     });
   } catch (error) {
@@ -415,24 +453,24 @@ async function addReport(req, res) {
     if (!workCompleted) {
       return res.status(400).json({ success: false, message: 'Work completed is required' });
     }
-    const doc = await Deal.findById(id);
-    if (!doc) {
+    // Guard: check current report count via lightweight projection before pushing.
+    const existing = await Deal.findById(id).select('reports').lean();
+    if (!existing) {
       return res.status(404).json({ success: false, message: 'Deal not found' });
     }
-    if (doc.reports.length >= 500) {
+    if (existing.reports.length >= 500) {
       return res.status(400).json({ success: false, message: 'Too many reports on this deal' });
     }
     const createdBy = (req.auth && req.auth.userId) || '';
-    doc.reports.push({
-      date,
-      workCompleted,
-      comment: cleanText(req.body && req.body.comment, 10000) || '',
-      nextPlan: cleanText(req.body && req.body.nextPlan, 10000) || '',
-      createdBy,
-    });
-    await doc.save();
-    const fresh = await Deal.findById(id).select(DEAL_SELECT_NO_BYTES).lean();
-    return res.status(201).json({ success: true, message: 'Report added', data: stripAttachmentData(fresh) });
+    const doc = await Deal.findByIdAndUpdate(
+      id,
+      { $push: { reports: { date, workCompleted, comment: cleanText(req.body && req.body.comment, 10000) || '', nextPlan: cleanText(req.body && req.body.nextPlan, 10000) || '', createdBy } } },
+      { new: true }
+    ).select(DEAL_SELECT_NO_BYTES).lean();
+    if (!doc) {
+      return res.status(404).json({ success: false, message: 'Deal not found' });
+    }
+    return res.status(201).json({ success: true, message: 'Report added', data: stripAttachmentData(doc) });
   } catch (error) {
     if (error && error.name === 'ValidationError') {
       return res.status(400).json({ success: false, message: 'Validation failed', error: errDetail(error) });
@@ -450,43 +488,49 @@ async function updateReport(req, res) {
     if (!isValidId(id) || !isValidId(reportId)) {
       return res.status(400).json({ success: false, message: 'Invalid ID' });
     }
-    const doc = await Deal.findById(id);
-    if (!doc) {
-      return res.status(404).json({ success: false, message: 'Deal not found' });
-    }
-    const item = findSubdoc(doc, 'reports', reportId);
-    if (!item) {
-      return res.status(404).json({ success: false, message: 'Report not found' });
-    }
+    const setFields = {};
     if (req.body && req.body.date !== undefined) {
       const date = toDateOrNull(req.body.date);
       if (!date) {
         return res.status(400).json({ success: false, message: 'Invalid report date' });
       }
-      item.date = date;
+      setFields['reports.$.date'] = date;
     }
     if (req.body && req.body.workCompleted !== undefined) {
       const workCompleted = cleanText(req.body.workCompleted, 10000);
       if (!workCompleted) {
         return res.status(400).json({ success: false, message: 'Work completed is required' });
       }
-      item.workCompleted = workCompleted;
+      setFields['reports.$.workCompleted'] = workCompleted;
     }
     if (req.body && req.body.comment !== undefined) {
       if (typeof req.body.comment !== 'string') {
         return res.status(400).json({ success: false, message: 'Invalid comment' });
       }
-      item.comment = cleanText(req.body.comment, 10000) || '';
+      setFields['reports.$.comment'] = cleanText(req.body.comment, 10000) || '';
     }
     if (req.body && req.body.nextPlan !== undefined) {
       if (typeof req.body.nextPlan !== 'string') {
         return res.status(400).json({ success: false, message: 'Invalid next plan' });
       }
-      item.nextPlan = cleanText(req.body.nextPlan, 10000) || '';
+      setFields['reports.$.nextPlan'] = cleanText(req.body.nextPlan, 10000) || '';
     }
-    await doc.save();
-    const fresh = await Deal.findById(id).select(DEAL_SELECT_NO_BYTES).lean();
-    return res.json({ success: true, message: 'Report updated', data: stripAttachmentData(fresh) });
+    if (Object.keys(setFields).length === 0) {
+      const doc = await Deal.findById(id).select(DEAL_SELECT_NO_BYTES).lean();
+      if (!doc) {
+        return res.status(404).json({ success: false, message: 'Deal not found' });
+      }
+      return res.json({ success: true, message: 'Report updated', data: stripAttachmentData(doc) });
+    }
+    const doc = await Deal.findOneAndUpdate(
+      { _id: id, 'reports._id': reportId },
+      { $set: setFields },
+      { new: true }
+    ).select(DEAL_SELECT_NO_BYTES).lean();
+    if (!doc) {
+      return res.status(404).json({ success: false, message: 'Report not found' });
+    }
+    return res.json({ success: true, message: 'Report updated', data: stripAttachmentData(doc) });
   } catch (error) {
     return sendError(res, 500, 'Failed to update report.', error);
   }
