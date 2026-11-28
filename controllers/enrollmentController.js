@@ -511,23 +511,36 @@ async function verifyPayment(req, res) {
     }
 
     // Update payment record as verified/paid
-    payment.razorpayPaymentId = razorpay_payment_id;
-    payment.razorpaySignature = razorpay_signature;
-    payment.razorpaySignatureVerified = true;
-    payment.paymentStatus = 'paid';
-    payment.paymentMethod = paymentMethod;
-    await payment.save();
+    try {
+      payment.razorpayPaymentId = razorpay_payment_id;
+      payment.razorpaySignature = razorpay_signature;
+      payment.razorpaySignatureVerified = true;
+      payment.paymentStatus = 'paid';
+      payment.paymentMethod = paymentMethod;
+      await payment.save();
+    } catch (saveError) {
+      return sendError(res, 500, 'Error saving payment record');
+    }
 
     // Update enrollment as confirmed/paid
-    enrollment.paymentStatus = 'paid';
-    enrollment.enrollmentStatus = 'confirmed';
-    enrollment.razorpayOrderId = razorpay_order_id;
-    enrollment.razorpayPaymentId = razorpay_payment_id;
-    enrollment.paidAt = new Date();
-    await enrollment.save();
+    try {
+      enrollment.paymentStatus = 'paid';
+      enrollment.enrollmentStatus = 'confirmed';
+      enrollment.razorpayOrderId = razorpay_order_id;
+      enrollment.razorpayPaymentId = razorpay_payment_id;
+      enrollment.paidAt = new Date();
+      await enrollment.save();
+    } catch (saveError) {
+      return sendError(res, 500, 'Error updating enrollment record');
+    }
 
-    // Send confirmation emails (only after successful verification, at most once)
-    await sendConfirmationOnce(enrollment._id, training);
+    // Send confirmation emails (only after successful verification, at most once).
+    // Email failures do not reverse the verified payment.
+    try {
+      await sendConfirmationOnce(enrollment._id, training);
+    } catch (emailError) {
+      console.error('[email] enrollment confirmation send failed:', emailError.message);
+    }
 
     return res.json({
       success: true,
@@ -543,7 +556,7 @@ async function verifyPayment(req, res) {
       }
     });
   } catch (error) {
-    return sendError(res, 500, 'Error verifying payment', error);
+    return sendError(res, 500, 'Error verifying payment');
   }
 }
 
