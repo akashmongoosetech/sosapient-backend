@@ -416,7 +416,12 @@ async function verifyPayment(req, res) {
       return sendError(res, 400, 'Invalid enrollment ID');
     }
 
-    const enrollment = await Enrollment.findById(enrollmentId);
+    let enrollment;
+    try {
+      enrollment = await Enrollment.findById(enrollmentId);
+    } catch (findError) {
+      return sendError(res, 500, 'Error fetching enrollment record');
+    }
     if (!enrollment) {
       return sendError(res, 404, 'Enrollment not found');
     }
@@ -464,7 +469,12 @@ async function verifyPayment(req, res) {
     }
 
     // Fetch payment record to validate amount and order ownership
-    const payment = await Payment.findOne({ razorpayOrderId: razorpay_order_id });
+    let payment;
+    try {
+      payment = await Payment.findOne({ razorpayOrderId: razorpay_order_id });
+    } catch (findError) {
+      return sendError(res, 500, 'Error fetching payment record');
+    }
     if (!payment) {
       return sendError(res, 404, 'Payment order not found');
     }
@@ -478,7 +488,12 @@ async function verifyPayment(req, res) {
       return sendError(res, 400, 'Payment amount does not match the enrollment amount');
     }
 
-    const training = await Training.findById(enrollment.trainingId).lean();
+    let training;
+    try {
+      training = await Training.findById(enrollment.trainingId).lean();
+    } catch (findError) {
+      return sendError(res, 500, 'Error fetching training record');
+    }
     if (!training) {
       return sendError(res, 404, 'Training not found');
     }
