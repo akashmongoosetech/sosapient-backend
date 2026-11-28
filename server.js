@@ -186,6 +186,8 @@ app.use('/api/trainings', trainingRoutes);
 app.use('/api/training', enrollmentRoutes);
 const dealRoutes = require('./routes/deal.routes');
 app.use('/api/deals', dealRoutes);
+const candidatesRoutes = require('./routes/candidatesRoutes');
+app.use('/api/admin/candidates', candidatesRoutes);
 const chatbotRoutes = require('./routes/chatbot.routes');
 app.use('/api/chatbot', chatbotRoutes);
 // Uploaded images (blog featured images, comment avatars) served from MongoDB.
