@@ -11,6 +11,8 @@ const { contactVisitorEmail } = require('./email/contactVisitor');
 const { contactAdminEmail } = require('./email/contactAdmin');
 const { careerVisitorEmail } = require('./email/careerApplicant');
 const { careerAdminEmail } = require('./email/careerAdmin');
+const { enrollmentCandidateEmail } = require('./email/enrollmentCandidate');
+const { enrollmentAdminEmail } = require('./email/enrollmentAdmin');
 
 module.exports = {
   BRAND,
@@ -22,5 +24,7 @@ module.exports = {
   contactVisitorEmail,
   contactAdminEmail,
   careerVisitorEmail,
-  careerAdminEmail
+  careerAdminEmail,
+  enrollmentCandidateEmail,
+  enrollmentAdminEmail
 };

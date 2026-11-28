@@ -74,6 +74,16 @@ app.use(cors({
 const leadRoutesEarly = require('./routes/lead.routes');
 app.use('/api/leads', leadRoutesEarly);
 
+// Razorpay webhook MUST receive the exact raw bytes that were signed, so it is
+// mounted before the global JSON parser (which would otherwise consume and
+// re-serialise the body and invalidate the HMAC check).
+const { webhook: razorpayWebhook } = require('./controllers/enrollmentController');
+app.post(
+  '/api/training/payment/webhook',
+  express.raw({ type: '*/*', limit: '1mb' }),
+  razorpayWebhook
+);
+
 // Body parsers: keep global limits small; blog image/content uploads use multipart (multer) limits instead
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
@@ -92,7 +102,7 @@ app.use((req, res, next) => {
   const start = process.hrtime.bigint();
   res.on('finish', () => {
     if (process.env.NODE_ENV !== 'test') {
-      const ms = Number(process.hrtime.bigint() - start) / 1000000n;
+      const ms = Number((process.hrtime.bigint() - start) / 1000000n);
       if (ms > 500) {
         console.log(`[slow] ${req.method} ${req.url} ${res.statusCode} ${ms.toFixed(0)}ms`);
       }
@@ -137,6 +147,8 @@ const copilotKitRoutes = require('./routes/copilotkit.routes');
 const jobRoutes = require('./routes/job.routes');
 const caseStudyRoutes = require('./routes/caseStudy.routes');
 const certificateRoutes = require('./routes/certificate.routes');
+const trainingRoutes = require('./routes/trainingRoutes');
+const enrollmentRoutes = require('./routes/enrollmentRoutes');
 
 // Health check endpoint (DB-aware: reports degraded when Mongo is down)
 app.get('/health', (req, res) => {
@@ -170,6 +182,8 @@ app.use('/api', subscriberRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/case-studies', caseStudyRoutes);
 app.use('/api/certificates', certificateRoutes);
+app.use('/api/trainings', trainingRoutes);
+app.use('/api/training', enrollmentRoutes);
 const dealRoutes = require('./routes/deal.routes');
 app.use('/api/deals', dealRoutes);
 const chatbotRoutes = require('./routes/chatbot.routes');
@@ -212,6 +226,8 @@ mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000 })
       require('./models/Subscriber'),
       require('./models/deal.model'),
       require('./models/imageAsset.model'),
+      require('./models/Training'),
+      require('./models/Enrollment'),
     ];
     for (const Model of models) {
       try {
@@ -220,6 +236,17 @@ mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000 })
       } catch (e) {
         console.warn(`${Model.modelName} index warmup failed:`, e.message);
       }
+    }
+
+    // Payment has legacy index definitions that must be repaired BEFORE the
+    // indexes are rebuilt (the old unique/partial definitions reject the
+    // second payment document). See utils/migratePaymentIndexes.js.
+    try {
+      const { migratePaymentIndexes } = require('./utils/migratePaymentIndexes');
+      await migratePaymentIndexes();
+      console.log('Payment indexes ready');
+    } catch (e) {
+      console.warn('Payment index warmup failed:', e.message);
     }
 
     // Backfill slugs for existing jobs missing them (safe to re-run; only

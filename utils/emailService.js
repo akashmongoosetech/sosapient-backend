@@ -210,10 +210,58 @@ async function sendCareerEmails(career) {
   return { admin: adminResult, visitor: visitorResult };
 }
 
+/**
+ * Send the candidate confirmation and the administrator notification for a
+ * course enrollment.
+ *
+ * @param {object} enrollment Stored Enrollment document.
+ * @param {object} training Stored Training document.
+ * @param {{ notifyVisitor?: boolean }} [options]
+ * @returns {Promise<{visitor: object, admin: object}>}
+ */
+async function sendEnrollmentEmails(enrollment, training, options = {}) {
+  const notifyVisitor = options.notifyVisitor !== false;
+  warnIfMisconfigured();
+
+  const sender = defaultSender();
+  const adminTo = resolveAdminRecipient('contact');
+  if (!adminTo) console.error('[email] CONTACT_ADMIN_EMAIL is not set; enrollment notification cannot be sent');
+
+  const adminReplyTo = String(enrollment.email || '').trim();
+
+  const [adminResult, visitorResult] = await Promise.all([
+    adminTo
+      ? attempt(
+          'enrollment-admin',
+          buildMessage(
+            templates.enrollmentAdminEmail(enrollment, training, sender.email),
+            adminTo,
+            adminReplyTo,
+            sender
+          )
+        )
+      : missingRecipient(),
+    notifyVisitor
+      ? attempt(
+          'enrollment-visitor',
+          buildMessage(
+            templates.enrollmentCandidateEmail(enrollment, training),
+            enrollment.email,
+            '',
+            sender
+          )
+        )
+      : Promise.resolve({ status: 'skipped', at: new Date() })
+  ]);
+
+  return { admin: adminResult, visitor: visitorResult };
+}
+
 module.exports = {
   resolveAdminRecipient,
   summarise,
   persistDelivery,
   sendContactEmails,
-  sendCareerEmails
+  sendCareerEmails,
+  sendEnrollmentEmails
 };

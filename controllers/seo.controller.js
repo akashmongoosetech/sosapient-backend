@@ -1,6 +1,7 @@
 const Blog = require('../models/blog.model');
 const CaseStudy = require('../models/caseStudy.model');
 const Job = require('../models/job.model');
+const Training = require('../models/Training');
 
 function siteUrl() {
   return String(process.env.SITE_URL || 'https://sosapient.in').replace(/\/+$/, '');
@@ -59,6 +60,10 @@ async function sitemap(req, res) {
       .select('_id slug updatedAt')
       .sort({ updatedAt: -1 })
       .lean();
+    const trainings = await Training.find({ status: 'published' })
+      .select('slug updatedAt')
+      .sort({ updatedAt: -1 })
+      .lean();
     const industrySlugs = [
       'healthcare-telehealth',
       'ecommerce-retail',
@@ -87,7 +92,8 @@ async function sitemap(req, res) {
       { loc: `${base}/services`, changefreq: 'weekly', priority: '0.9' },
       { loc: `${base}/industries`, changefreq: 'weekly', priority: '0.9' },
       { loc: `${base}/case-studies`, changefreq: 'weekly', priority: '0.9' },
-      { loc: `${base}/careers`, changefreq: 'weekly', priority: '0.7' },      { loc: `${base}/terms`, changefreq: 'yearly', priority: '0.3' },
+      { loc: `${base}/careers`, changefreq: 'weekly', priority: '0.7' },
+      { loc: `${base}/training`, changefreq: 'weekly', priority: '0.9' },      { loc: `${base}/terms`, changefreq: 'yearly', priority: '0.3' },
       { loc: `${base}/cookies`, changefreq: 'yearly', priority: '0.3' },
       ...jobs.map((j) => ({
         loc: `${base}/careers/${j.slug || j._id}`,
@@ -120,6 +126,12 @@ async function sitemap(req, res) {
           : undefined,
         changefreq: 'weekly',
         priority: '0.8'
+      })),
+      ...trainings.map((t) => ({
+        loc: `${base}/training/${t.slug}`,
+        lastmod: t.updatedAt ? new Date(t.updatedAt).toISOString() : undefined,
+        changefreq: 'weekly',
+        priority: '0.8'
       }))
     ];
     const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls
@@ -149,6 +161,8 @@ function robots(req, res) {
     'Allow: /case-studies',
     'Allow: /case-studies/*',
     'Allow: /careers',
+    'Allow: /training',
+    'Allow: /training/*',
     'Allow: /contact',
     'Disallow: /portfolio',
     'Allow: /privacy',
