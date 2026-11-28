@@ -446,18 +446,20 @@ async function verifyPayment(req, res) {
       .digest('hex');
 
     if (!signaturesMatch(expectedSignature, razorpay_signature)) {
-      // Record the failure against a known order only (never upsert from a
-      // signature we have not verified).
-      await Payment.findOneAndUpdate(
-        { razorpayOrderId: razorpay_order_id, enrollmentId: enrollment._id },
-        {
-          paymentStatus: 'failed',
-          razorpayPaymentId: razorpay_payment_id,
-          razorpaySignature,
-          razorpaySignatureVerified: false,
-          failureReason: 'Signature verification failed'
-        }
-      );
+      try {
+        await Payment.findOneAndUpdate(
+          { razorpayOrderId: razorpay_order_id, enrollmentId: enrollment._id },
+          {
+            paymentStatus: 'failed',
+            razorpayPaymentId: razorpay_payment_id,
+            razorpaySignature,
+            razorpaySignatureVerified: false,
+            failureReason: 'Signature verification failed'
+          }
+        );
+      } catch (updateError) {
+        console.error('[verify] Failed to record signature failure:', updateError.message);
+      }
       return sendError(res, 400, 'Payment signature verification failed');
     }
 
@@ -497,16 +499,20 @@ async function verifyPayment(req, res) {
     // Only a captured payment may confirm an enrollment. Authorized/pending/
     // failed payments must not move the enrollment to paid/confirmed.
     if (razorpayStatus !== 'captured') {
-      await Payment.findOneAndUpdate(
-        { razorpayOrderId: razorpay_order_id, enrollmentId: enrollment._id },
-        {
-          paymentStatus: 'failed',
-          razorpayPaymentId: razorpay_payment_id,
-          razorpaySignature,
-          razorpaySignatureVerified: false,
-          failureReason: `Razorpay payment not captured (status: ${razorpayStatus || 'unknown'})`
-        }
-      );
+      try {
+        await Payment.findOneAndUpdate(
+          { razorpayOrderId: razorpay_order_id, enrollmentId: enrollment._id },
+          {
+            paymentStatus: 'failed',
+            razorpayPaymentId: razorpay_payment_id,
+            razorpaySignature,
+            razorpaySignatureVerified: false,
+            failureReason: `Razorpay payment not captured (status: ${razorpayStatus || 'unknown'})`
+          }
+        );
+      } catch (updateError) {
+        console.error('[verify] Failed to record non-captured payment:', updateError.message);
+      }
       return sendError(res, 400, 'Payment not captured by Razorpay');
     }
 
